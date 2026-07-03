@@ -8,7 +8,6 @@ import {
   RuntimeItemId,
   RuntimeRequestId,
   ThreadId,
-  type ToolLifecycleItemType,
   TurnId,
   type UserInputQuestion,
 } from "@t3tools/contracts";
@@ -29,6 +28,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import type { OpencodeClient, Part, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { toToolLifecycleItemType } from "@t3tools/shared/toolLifecycle";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
@@ -410,38 +410,6 @@ type EventBaseInput = {
   readonly createdAt?: string | undefined;
   readonly raw?: unknown;
 };
-
-function toToolLifecycleItemType(toolName: string): ToolLifecycleItemType {
-  const normalized = toolName.toLowerCase();
-  if (normalized.includes("bash") || normalized.includes("command")) {
-    return "command_execution";
-  }
-  if (
-    normalized.includes("edit") ||
-    normalized.includes("write") ||
-    normalized.includes("patch") ||
-    normalized.includes("multiedit")
-  ) {
-    return "file_change";
-  }
-  if (normalized.includes("web")) {
-    return "web_search";
-  }
-  if (normalized.includes("mcp")) {
-    return "mcp_tool_call";
-  }
-  if (normalized.includes("image")) {
-    return "image_view";
-  }
-  if (
-    normalized.includes("task") ||
-    normalized.includes("agent") ||
-    normalized.includes("subtask")
-  ) {
-    return "collab_agent_tool_call";
-  }
-  return "dynamic_tool_call";
-}
 
 function mapPermissionToRequestType(
   permission: string,

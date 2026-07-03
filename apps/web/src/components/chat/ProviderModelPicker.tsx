@@ -64,10 +64,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const selectedModel =
     selectedInstanceOptions.find((option) => option.slug === props.model) ??
     (activeEntry?.driverKind === "opencode" ? undefined : selectedInstanceOptions[0]);
-  const triggerTitle = selectedModel ? getTriggerDisplayModelName(selectedModel) : props.model;
+  const triggerTitle = selectedModel
+    ? getTriggerDisplayModelName(selectedModel)
+    : props.model || "No models";
   const triggerLabel = selectedModel
     ? `${getTriggerDisplayModelLabel(selectedModel)}${selectedModel.isUnavailable ? " (Unavailable)" : ""}`
-    : props.model;
+    : props.model || "No models";
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 

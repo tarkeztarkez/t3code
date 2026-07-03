@@ -172,7 +172,13 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
             compact ? "h-9 px-3 sm:h-8" : "h-9 px-4 sm:h-8",
           )}
           {...pointerFocusProps}
-          disabled={isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable}
+          disabled={
+            isSendBusy ||
+            isSendDisabled ||
+            isConnecting ||
+            isEnvironmentUnavailable ||
+            !hasSendableContent
+          }
         >
           {isConnecting || isSendBusy ? "Sending..." : "Refine"}
         </Button>
@@ -186,7 +192,13 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           size="sm"
           className="h-9 rounded-l-full rounded-r-none bg-message-action px-4 text-message-action-foreground hover:bg-message-action-hover sm:h-8"
           {...pointerFocusProps}
-          disabled={isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable}
+          disabled={
+            isSendBusy ||
+            isSendDisabled ||
+            isConnecting ||
+            isEnvironmentUnavailable ||
+            !hasSendableContent
+          }
         >
           {isConnecting || isSendBusy ? "Sending..." : "Implement"}
         </Button>
@@ -199,7 +211,13 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
                 className="h-9 rounded-l-none rounded-r-full border-l-message-action-foreground/20 bg-message-action px-2 text-message-action-foreground hover:bg-message-action-hover sm:h-8"
                 aria-label="Implementation actions"
                 {...pointerFocusProps}
-                disabled={isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable}
+                disabled={
+                  isSendBusy ||
+                  isSendDisabled ||
+                  isConnecting ||
+                  isEnvironmentUnavailable ||
+                  !hasSendableContent
+                }
               />
             }
           >
@@ -207,7 +225,13 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           </MenuTrigger>
           <MenuPopup align="end" side="top">
             <MenuItem
-              disabled={isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable}
+              disabled={
+                isSendBusy ||
+                isSendDisabled ||
+                isConnecting ||
+                isEnvironmentUnavailable ||
+                !hasSendableContent
+              }
               onClick={() => void onImplementPlanInNewThread()}
             >
               Implement in a new thread

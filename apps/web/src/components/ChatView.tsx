@@ -2,6 +2,7 @@ import {
   type ApprovalRequestId,
   type ChatFileAttachment,
   DEFAULT_MODEL,
+  PROVIDERS_WITHOUT_FALLBACK_MODEL,
   defaultInstanceIdForDriver,
   type EnvironmentId,
   type MessageId,
@@ -5818,6 +5819,10 @@ function ChatViewContent(props: ChatViewProps) {
       return;
     }
     const threadIdForSend = activeThread.id;
+    if (ctxSelectedModel.trim().length === 0) {
+      setThreadError(threadIdForSend, "Select a model before sending.");
+      return;
+    }
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath
@@ -6065,9 +6070,12 @@ function ChatViewContent(props: ChatViewProps) {
       }
     }
     const title = truncate(titleSeed);
+    const fallbackCreateModel = PROVIDERS_WITHOUT_FALLBACK_MODEL.has(ctxSelectedProvider)
+      ? ""
+      : activeProject.defaultModelSelection?.model || DEFAULT_MODEL;
     const threadCreateModelSelection = createModelSelection(
       ctxSelectedModelSelection.instanceId,
-      ctxSelectedModel || activeProject.defaultModelSelection?.model || DEFAULT_MODEL,
+      ctxSelectedModel || fallbackCreateModel,
       ctxSelectedModelSelection.options,
     );
 
@@ -6516,6 +6524,10 @@ function ChatViewContent(props: ChatViewProps) {
       } = sendCtx;
 
       const threadIdForSend = activeThread.id;
+      if (ctxSelectedModel.trim().length === 0) {
+        setThreadError(threadIdForSend, "Select a model before sending.");
+        return;
+      }
       const messageIdForSend = newMessageId();
       const messageCreatedAt = new Date().toISOString();
       const outgoingMessageText = formatOutgoingPrompt({
@@ -6660,6 +6672,11 @@ function ChatViewContent(props: ChatViewProps) {
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
 
+    if (ctxSelectedModel.trim().length === 0) {
+      setThreadError(activeThread.id, "Select a model before sending.");
+      return;
+    }
+
     const createdAt = new Date().toISOString();
     const nextThreadId = newThreadId();
     const planMarkdown = activeProposedPlan.planMarkdown;
@@ -6789,6 +6806,7 @@ function ChatViewContent(props: ChatViewProps) {
     navigate,
     resetLocalDispatch,
     runtimeMode,
+    setThreadError,
     startThreadTurn,
     environmentId,
     composerRef,
