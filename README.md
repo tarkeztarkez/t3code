@@ -4,7 +4,7 @@ T3 Code is an "agent harness control surface". It enables control of the agents 
 
 This fork adds Pi to T3 Code's Claude Code, Codex, Cursor, Grok Build, and OpenCode providers.
 
-Pi setup is automatic by default. T3 Code installs `@earendil-works/pi-coding-agent` when `pi` is missing, then installs `@howaboua/pi-codex-conversion` through Pi. This requires Node.js 22.19 or newer and npm on `PATH`. Both install options can be disabled in the Pi provider settings.
+Pi setup is automatic by default. T3 Code installs `@earendil-works/pi-coding-agent` when `pi` is missing, then installs `@howaboua/pi-codex-conversion` and `pi-mcp-adapter` through Pi. This requires Node.js 22.19 or newer and npm on `PATH`. Both install options can be disabled in the Pi provider settings.
 
 ## "Wait, what are you selling me?"
 

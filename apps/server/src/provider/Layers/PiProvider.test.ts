@@ -29,7 +29,7 @@ const runtimeMock = {
     requests: [] as Array<Record<string, unknown>>,
     closeCalls: 0,
     versionResult: { stdout: "pi 0.84.3\n", stderr: "", code: 0 },
-    packageList: `User packages:\n  npm:@howaboua/pi-codex-conversion\n`,
+    packageList: `User packages:\n  npm:@howaboua/pi-codex-conversion\n  npm:pi-mcp-adapter\n`,
     modelsData: {
       models: [
         {
@@ -61,7 +61,7 @@ const runtimeMock = {
     this.state.requests.length = 0;
     this.state.closeCalls = 0;
     this.state.versionResult = { stdout: "pi 0.84.3\n", stderr: "", code: 0 };
-    this.state.packageList = `User packages:\n  npm:@howaboua/pi-codex-conversion\n`;
+    this.state.packageList = `User packages:\n  npm:@howaboua/pi-codex-conversion\n  npm:pi-mcp-adapter\n`;
     this.state.modelsData = {
       models: [
         {
@@ -234,6 +234,7 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
           ["pi", "--version"],
           ["pi", "list", "--no-approve"],
           ["pi", "install", "npm:@howaboua/pi-codex-conversion", "--no-approve"],
+          ["pi", "install", "npm:pi-mcp-adapter", "--no-approve"],
         ],
       );
     }),
@@ -255,6 +256,7 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
           ["list", "--no-approve"],
           ["remove", "npm:@howaboua/pi-codex-conversion-lite", "--no-approve"],
           ["install", "npm:@howaboua/pi-codex-conversion", "--no-approve"],
+          ["install", "npm:pi-mcp-adapter", "--no-approve"],
         ],
       );
     }),

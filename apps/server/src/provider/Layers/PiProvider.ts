@@ -37,6 +37,7 @@ const PI_CODEX_THINKING_LEVELS = [...PI_THINKING_LEVELS, "xhigh"] as const;
 const PI_NPM_PACKAGE = "@earendil-works/pi-coding-agent@latest";
 const CODEX_CONVERSION_PACKAGE = "npm:@howaboua/pi-codex-conversion";
 const CODEX_CONVERSION_LITE_PACKAGE = "npm:@howaboua/pi-codex-conversion-lite";
+const PI_MCP_ADAPTER_PACKAGE = "npm:pi-mcp-adapter";
 
 function supportsCodexConversion(version: string): boolean {
   const [major = 0, minor = 0] = version.split(".").map(Number);
@@ -299,6 +300,24 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
             : installExit.value.stderr.trim() ||
               `pi install exited with code ${installExit.value.code}`;
         return fallback(`Failed to install Codex Conversion: ${detail}`, version);
+      }
+    }
+
+    if (!hasPiPackage(listExit.value.stdout, PI_MCP_ADAPTER_PACKAGE)) {
+      const installExit = yield* Effect.exit(
+        piRuntime.runCommand({
+          binaryPath: piSettings.binaryPath,
+          args: ["install", PI_MCP_ADAPTER_PACKAGE, "--no-approve"],
+          environment: resolvedEnvironment,
+        }),
+      );
+      if (installExit._tag === "Failure" || installExit.value.code !== 0) {
+        const detail =
+          installExit._tag === "Failure"
+            ? failureDetail(installExit.cause)
+            : installExit.value.stderr.trim() ||
+              `pi install exited with code ${installExit.value.code}`;
+        return fallback(`Failed to install Pi MCP Adapter: ${detail}`, version);
       }
     }
   }

@@ -596,9 +596,9 @@ export const PiSettings = makeProviderSettingsSchema(
     installCodexConversion: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({
-        title: "Install Codex Conversion",
+        title: "Install Pi integrations",
         description:
-          "Install @howaboua/pi-codex-conversion in Pi's global package settings when it is missing.",
+          "Install Codex Conversion and Pi MCP Adapter in Pi's global package settings when they are missing.",
       }),
     ),
     customModels: Schema.Array(Schema.String).pipe(

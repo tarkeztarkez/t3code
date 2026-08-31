@@ -633,6 +633,14 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         return;
       }
       if (
+        method === "setStatus" ||
+        method === "setWidget" ||
+        method === "setTitle" ||
+        method === "set_editor_text"
+      ) {
+        return;
+      }
+      if (
         method !== "select" &&
         method !== "confirm" &&
         method !== "input" &&

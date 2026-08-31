@@ -811,6 +811,25 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
     }),
   );
 
+  it.effect("ignores fire-and-forget Pi status updates", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-status-update");
+      yield* startPiSession(adapter, threadId);
+      const handle = runtimeMock.state.handles[0]!;
+
+      yield* Queue.offer(handle.eventsQueue, {
+        type: "extension_ui_request",
+        id: "status-1",
+        method: "setStatus",
+      });
+      yield* Effect.yieldNow;
+      yield* Effect.yieldNow;
+
+      NodeAssert.deepEqual(runtimeMock.state.notifications, []);
+    }),
+  );
+
   it.effect("cancels unsupported Pi input and editor dialogs", () =>
     Effect.gen(function* () {
       const adapter = yield* PiAdapter;
