@@ -591,6 +591,7 @@ export const PiSettings = makeProviderSettingsSchema(
         title: "Install Pi automatically",
         description:
           "Install or update @earendil-works/pi-coding-agent with npm when the Pi CLI is missing or too old.",
+        providerSettingsForm: { control: "switch" },
       }),
     ),
     installCodexConversion: Schema.Boolean.pipe(
@@ -599,6 +600,7 @@ export const PiSettings = makeProviderSettingsSchema(
         title: "Install Pi integrations",
         description:
           "Install Codex Conversion and Pi MCP Adapter in Pi's global package settings when they are missing.",
+        providerSettingsForm: { control: "switch" },
       }),
     ),
     customModels: Schema.Array(Schema.String).pipe(

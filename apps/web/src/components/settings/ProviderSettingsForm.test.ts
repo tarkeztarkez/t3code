@@ -49,6 +49,18 @@ describe("ProviderSettingsForm helpers", () => {
     ]);
   });
 
+  it("renders Pi installation options as enabled switches", () => {
+    const pi = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("pi")];
+    expect(pi).toBeDefined();
+
+    expect(
+      deriveProviderSettingsFields(pi!).filter((field) => field.key !== "binaryPath"),
+    ).toMatchObject([
+      { key: "autoInstall", control: "switch", defaultBooleanValue: true },
+      { key: "installCodexConversion", control: "switch", defaultBooleanValue: true },
+    ]);
+  });
+
   it("preserves unknown config keys while omitting empty configurable fields", () => {
     const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
     expect(opencode).toBeDefined();
