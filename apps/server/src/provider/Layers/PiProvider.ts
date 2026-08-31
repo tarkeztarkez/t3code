@@ -39,6 +39,17 @@ const CODEX_CONVERSION_PACKAGE = "npm:@howaboua/pi-codex-conversion";
 const CODEX_CONVERSION_LITE_PACKAGE = "npm:@howaboua/pi-codex-conversion-lite";
 const PI_MCP_ADAPTER_PACKAGE = "npm:pi-mcp-adapter";
 
+export function withWindowsPiPaths(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if ((environment.OS ?? process.env.OS)?.toLowerCase() !== "windows_nt") return environment;
+  const appData = environment.APPDATA?.trim();
+  const programFiles = environment.ProgramFiles?.trim() || "C:\\Program Files";
+  const additions = [appData ? `${appData}\\npm` : undefined, `${programFiles}\\nodejs`].filter(
+    (entry): entry is string => entry !== undefined,
+  );
+  const inheritedPath = environment.PATH ?? environment.Path ?? environment.path ?? "";
+  return { ...environment, PATH: [...additions, inheritedPath].filter(Boolean).join(";") };
+}
+
 function supportsCodexConversion(version: string): boolean {
   const [major = 0, minor = 0] = version.split(".").map(Number);
   return major > 0 || minor >= 82;
@@ -161,7 +172,8 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
   environment?: NodeJS.ProcessEnv,
 ): Effect.fn.Return<ServerProviderDraft, never, PiRuntime> {
   const piRuntime = yield* PiRuntime;
-  const resolvedEnvironment = environment ?? process.env;
+  const resolvedEnvironment = withWindowsPiPaths(environment ?? process.env);
+  const isWindows = (resolvedEnvironment.OS ?? process.env.OS)?.toLowerCase() === "windows_nt";
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
   const failureDetail = (cause: Cause.Cause<unknown>) => piRuntimeErrorDetail(Cause.squash(cause));
 
@@ -201,10 +213,37 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
       environment: resolvedEnvironment,
     });
   const installPi = () =>
-    piRuntime.runCommand({
-      binaryPath: "npm",
-      args: ["install", "--global", PI_NPM_PACKAGE],
-      environment: resolvedEnvironment,
+    Effect.gen(function* () {
+      if (isWindows) {
+        const npmExit = yield* Effect.exit(
+          piRuntime.runCommand({
+            binaryPath: "npm",
+            args: ["--version"],
+            environment: resolvedEnvironment,
+          }),
+        );
+        if (npmExit._tag === "Failure" || npmExit.value.code !== 0) {
+          const nodeInstall = yield* piRuntime.runCommand({
+            binaryPath: "winget",
+            args: [
+              "install",
+              "--id",
+              "OpenJS.NodeJS.LTS",
+              "--exact",
+              "--silent",
+              "--accept-package-agreements",
+              "--accept-source-agreements",
+            ],
+            environment: resolvedEnvironment,
+          });
+          if (nodeInstall.code !== 0) return nodeInstall;
+        }
+      }
+      return yield* piRuntime.runCommand({
+        binaryPath: "npm",
+        args: ["install", "--global", PI_NPM_PACKAGE],
+        environment: resolvedEnvironment,
+      });
     });
 
   let versionExit = yield* Effect.exit(runVersionProbe());

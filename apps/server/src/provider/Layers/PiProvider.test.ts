@@ -16,7 +16,11 @@ import {
   type PiRuntimeShape,
   type SpawnPiRpcInput,
 } from "../piRuntime.ts";
-import { buildInitialPiProviderSnapshot, checkPiProviderStatus } from "./PiProvider.ts";
+import {
+  buildInitialPiProviderSnapshot,
+  checkPiProviderStatus,
+  withWindowsPiPaths,
+} from "./PiProvider.ts";
 
 const decodePiSettings = Schema.decodeSync(PiSettings);
 const piSettings = (overrides: Record<string, unknown> = {}) =>
@@ -53,6 +57,7 @@ const runtimeMock = {
       ],
     } as unknown,
     versionError: null as PiRuntimeError | null,
+    npmError: null as PiRuntimeError | null,
     modelsError: null as PiRuntimeError | null,
   },
   reset() {
@@ -85,6 +90,7 @@ const runtimeMock = {
       ],
     };
     this.state.versionError = null;
+    this.state.npmError = null;
     this.state.modelsError = null;
   },
 };
@@ -128,6 +134,10 @@ const PiRuntimeTestDouble: PiRuntimeShape = {
     Effect.gen(function* () {
       runtimeMock.state.calls.push({ binaryPath: input.binaryPath, args: input.args });
       const command = input.args[0];
+      if (input.binaryPath === "npm" && command === "--version") {
+        if (runtimeMock.state.npmError) return yield* runtimeMock.state.npmError;
+        return { stdout: "11.0.0\n", stderr: "", code: 0 };
+      }
       if (command === "--version") {
         if (runtimeMock.state.versionError) return yield* runtimeMock.state.versionError;
         return runtimeMock.state.versionResult;
@@ -154,6 +164,22 @@ const PiProviderTestLayer = Layer.succeed(PiRuntime, PiRuntimeTestDouble);
 beforeEach(() => {
   runtimeMock.reset();
 });
+
+it.effect("adds Windows Node and npm directories to Pi's PATH", () =>
+  Effect.sync(() => {
+    const environment = withWindowsPiPaths({
+      OS: "Windows_NT",
+      APPDATA: "C:\\Users\\Kacper\\AppData\\Roaming",
+      ProgramFiles: "C:\\Program Files",
+      PATH: "C:\\Windows\\System32",
+    });
+
+    NodeAssert.equal(
+      environment.PATH,
+      "C:\\Users\\Kacper\\AppData\\Roaming\\npm;C:\\Program Files\\nodejs;C:\\Windows\\System32",
+    );
+  }),
+);
 
 it.effect(
   "buildInitialPiProviderSnapshot returns a disabled snapshot when settings.enabled is false",
@@ -235,6 +261,50 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
           ["pi", "list", "--no-approve"],
           ["pi", "install", "npm:@howaboua/pi-codex-conversion", "--no-approve"],
           ["pi", "install", "npm:pi-mcp-adapter", "--no-approve"],
+        ],
+      );
+    }),
+  );
+
+  it.effect("installs Node with winget before Pi when npm is missing on Windows", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.versionError = new PiRuntimeError({
+        operation: "runCommand",
+        detail: "spawn pi ENOENT",
+      });
+      runtimeMock.state.npmError = new PiRuntimeError({
+        operation: "runCommand",
+        detail: "spawn npm ENOENT",
+      });
+
+      const snapshot = yield* checkPiProviderStatus(
+        piSettings({ binaryPath: "pi", autoInstall: true }),
+        {
+          OS: "Windows_NT",
+          APPDATA: "C:\\Users\\Kacper\\AppData\\Roaming",
+          ProgramFiles: "C:\\Program Files",
+          PATH: "C:\\Windows\\System32",
+        },
+      );
+
+      NodeAssert.equal(snapshot.status, "ready");
+      NodeAssert.deepEqual(
+        runtimeMock.state.calls.slice(0, 5).map((call) => [call.binaryPath, ...call.args]),
+        [
+          ["pi", "--version"],
+          ["npm", "--version"],
+          [
+            "winget",
+            "install",
+            "--id",
+            "OpenJS.NodeJS.LTS",
+            "--exact",
+            "--silent",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+          ],
+          ["npm", "install", "--global", "@earendil-works/pi-coding-agent@latest"],
+          ["pi", "--version"],
         ],
       );
     }),
