@@ -1,9 +1,4 @@
-import {
-  ProviderDriverKind,
-  type ModelCapabilities,
-  type PiSettings,
-  type ServerProviderModel,
-} from "@t3tools/contracts";
+import type { ModelCapabilities, PiSettings, ServerProviderModel } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -27,7 +22,6 @@ import {
   type ServerProviderDraft,
 } from "../providerSnapshot.ts";
 
-const PROVIDER = ProviderDriverKind.make("pi");
 const PI_PRESENTATION = {
   displayName: "Pi",
   badgeLabel: "Early Access",
@@ -40,6 +34,18 @@ const DEFAULT_PI_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities
 
 const PI_MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
 const PI_CODEX_THINKING_LEVELS = [...PI_THINKING_LEVELS, "xhigh"] as const;
+const PI_NPM_PACKAGE = "@earendil-works/pi-coding-agent@latest";
+const CODEX_CONVERSION_PACKAGE = "npm:@howaboua/pi-codex-conversion";
+const CODEX_CONVERSION_LITE_PACKAGE = "npm:@howaboua/pi-codex-conversion-lite";
+
+function supportsCodexConversion(version: string): boolean {
+  const [major = 0, minor = 0] = version.split(".").map(Number);
+  return major > 0 || minor >= 82;
+}
+
+function hasPiPackage(output: string, source: string): boolean {
+  return output.split(/\r?\n/).some((line) => line.trim() === source);
+}
 
 function titleCaseSlug(value: string): string {
   return value
@@ -125,12 +131,7 @@ const piSnapshot = (input: {
     checkedAt: input.checkedAt,
     models:
       input.models ??
-      providerModelsFromSettings(
-        [],
-        PROVIDER,
-        input.piSettings.customModels,
-        DEFAULT_PI_MODEL_CAPABILITIES,
-      ),
+      providerModelsFromSettings([], input.piSettings.customModels, DEFAULT_PI_MODEL_CAPABILITIES),
     probe: input.probe,
   });
 
@@ -192,22 +193,114 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     });
   }
 
-  const versionExit = yield* Effect.exit(
+  const runVersionProbe = () =>
     piRuntime.runCommand({
       binaryPath: piSettings.binaryPath,
       args: ["--version"],
       environment: resolvedEnvironment,
-    }),
-  );
+    });
+  const installPi = () =>
+    piRuntime.runCommand({
+      binaryPath: "npm",
+      args: ["install", "--global", PI_NPM_PACKAGE],
+      environment: resolvedEnvironment,
+    });
+
+  let versionExit = yield* Effect.exit(runVersionProbe());
+  if (versionExit._tag === "Failure" && piSettings.autoInstall && piSettings.binaryPath === "pi") {
+    const installExit = yield* Effect.exit(installPi());
+    if (installExit._tag === "Failure" || installExit.value.code !== 0) {
+      const detail =
+        installExit._tag === "Failure"
+          ? failureDetail(installExit.cause)
+          : installExit.value.stderr.trim() || `npm exited with code ${installExit.value.code}`;
+      return fallback(`Pi is missing and automatic installation failed: ${detail}`);
+    }
+    versionExit = yield* Effect.exit(runVersionProbe());
+  }
   if (versionExit._tag === "Failure") {
     const detail = failureDetail(versionExit.cause);
     yield* Effect.logWarning(`Pi provider version probe failed: ${detail}`);
     return fallback(detail);
   }
-  const version = parseGenericCliVersion(versionExit.value.stdout);
+  let version = parseGenericCliVersion(versionExit.value.stdout);
   if (!version) {
     yield* Effect.logWarning("Pi provider version probe returned unparseable output.");
     return fallback("Unable to determine Pi version from `pi --version` output.");
+  }
+
+  if (piSettings.installCodexConversion && !supportsCodexConversion(version)) {
+    if (piSettings.autoInstall && piSettings.binaryPath === "pi") {
+      const installExit = yield* Effect.exit(installPi());
+      if (installExit._tag === "Failure" || installExit.value.code !== 0) {
+        const detail =
+          installExit._tag === "Failure"
+            ? failureDetail(installExit.cause)
+            : installExit.value.stderr.trim() || `npm exited with code ${installExit.value.code}`;
+        return fallback(`Pi ${version} is too old and automatic update failed: ${detail}`, version);
+      }
+      const updatedVersionExit = yield* Effect.exit(runVersionProbe());
+      if (updatedVersionExit._tag === "Failure") {
+        return fallback(failureDetail(updatedVersionExit.cause), version);
+      }
+      version = parseGenericCliVersion(updatedVersionExit.value.stdout);
+    }
+    if (!version || !supportsCodexConversion(version)) {
+      return fallback("Pi 0.82 or newer is required for Codex Conversion.", version);
+    }
+  }
+
+  if (piSettings.installCodexConversion) {
+    const listExit = yield* Effect.exit(
+      piRuntime.runCommand({
+        binaryPath: piSettings.binaryPath,
+        args: ["list", "--no-approve"],
+        environment: resolvedEnvironment,
+      }),
+    );
+    if (listExit._tag === "Failure" || listExit.value.code !== 0) {
+      const detail =
+        listExit._tag === "Failure"
+          ? failureDetail(listExit.cause)
+          : listExit.value.stderr.trim() || `pi list exited with code ${listExit.value.code}`;
+      return fallback(`Failed to inspect Pi packages: ${detail}`, version);
+    }
+
+    if (hasPiPackage(listExit.value.stdout, CODEX_CONVERSION_LITE_PACKAGE)) {
+      const removeExit = yield* Effect.exit(
+        piRuntime.runCommand({
+          binaryPath: piSettings.binaryPath,
+          args: ["remove", CODEX_CONVERSION_LITE_PACKAGE, "--no-approve"],
+          environment: resolvedEnvironment,
+        }),
+      );
+      if (removeExit._tag === "Failure" || removeExit.value.code !== 0) {
+        const detail =
+          removeExit._tag === "Failure"
+            ? failureDetail(removeExit.cause)
+            : removeExit.value.stderr.trim() ||
+              `pi remove exited with code ${removeExit.value.code}`;
+        return fallback(`Failed to remove Codex Conversion Lite: ${detail}`, version);
+      }
+    }
+
+    if (!hasPiPackage(listExit.value.stdout, CODEX_CONVERSION_PACKAGE)) {
+      const installExit = yield* Effect.exit(
+        piRuntime.runCommand({
+          binaryPath: piSettings.binaryPath,
+          args: ["install", CODEX_CONVERSION_PACKAGE, "--no-approve"],
+          environment: resolvedEnvironment,
+        }),
+      );
+      if (installExit._tag === "Failure" || installExit.value.code !== 0) {
+        const detail =
+          installExit._tag === "Failure"
+            ? failureDetail(installExit.cause)
+            : installExit.value.stderr.trim() ||
+              `pi install exited with code ${installExit.value.code}`;
+        return fallback(`Failed to install Codex Conversion: ${detail}`, version);
+      }
+    }
   }
 
   const modelsExit = yield* Effect.exit(
@@ -246,7 +339,6 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
   const discoveredModels = toServerProviderModels(piModels);
   const models = providerModelsFromSettings(
     discoveredModels,
-    PROVIDER,
     piSettings.customModels,
     DEFAULT_PI_MODEL_CAPABILITIES,
   );

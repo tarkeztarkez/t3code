@@ -19,6 +19,8 @@ import {
 import { buildInitialPiProviderSnapshot, checkPiProviderStatus } from "./PiProvider.ts";
 
 const decodePiSettings = Schema.decodeSync(PiSettings);
+const piSettings = (overrides: Record<string, unknown> = {}) =>
+  decodePiSettings({ autoInstall: false, installCodexConversion: false, ...overrides });
 
 const runtimeMock = {
   state: {
@@ -26,7 +28,8 @@ const runtimeMock = {
     spawnInputs: [] as Array<SpawnPiRpcInput>,
     requests: [] as Array<Record<string, unknown>>,
     closeCalls: 0,
-    versionResult: { stdout: "pi 0.4.1\n", stderr: "", code: 0 },
+    versionResult: { stdout: "pi 0.84.3\n", stderr: "", code: 0 },
+    packageList: `User packages:\n  npm:@howaboua/pi-codex-conversion\n`,
     modelsData: {
       models: [
         {
@@ -57,7 +60,8 @@ const runtimeMock = {
     this.state.spawnInputs.length = 0;
     this.state.requests.length = 0;
     this.state.closeCalls = 0;
-    this.state.versionResult = { stdout: "pi 0.4.1\n", stderr: "", code: 0 };
+    this.state.versionResult = { stdout: "pi 0.84.3\n", stderr: "", code: 0 };
+    this.state.packageList = `User packages:\n  npm:@howaboua/pi-codex-conversion\n`;
     this.state.modelsData = {
       models: [
         {
@@ -128,6 +132,16 @@ const PiRuntimeTestDouble: PiRuntimeShape = {
         if (runtimeMock.state.versionError) return yield* runtimeMock.state.versionError;
         return runtimeMock.state.versionResult;
       }
+      if (input.binaryPath === "npm" && command === "install") {
+        runtimeMock.state.versionError = null;
+        return { stdout: "installed\n", stderr: "", code: 0 };
+      }
+      if (command === "list") {
+        return { stdout: runtimeMock.state.packageList, stderr: "", code: 0 };
+      }
+      if (command === "install" || command === "remove") {
+        return { stdout: "ok\n", stderr: "", code: 0 };
+      }
       return yield* new PiRuntimeError({
         operation: "runCommand",
         detail: `Unexpected Pi command: ${input.args.join(" ")}`,
@@ -145,7 +159,7 @@ it.effect(
   "buildInitialPiProviderSnapshot returns a disabled snapshot when settings.enabled is false",
   () =>
     Effect.gen(function* () {
-      const snapshot = yield* buildInitialPiProviderSnapshot(decodePiSettings({ enabled: false }));
+      const snapshot = yield* buildInitialPiProviderSnapshot(piSettings({ enabled: false }));
       NodeAssert.equal(snapshot.enabled, false);
       NodeAssert.equal(snapshot.status, "disabled");
       NodeAssert.equal(snapshot.badgeLabel, "Early Access");
@@ -155,7 +169,7 @@ it.effect(
 
 it.effect("buildInitialPiProviderSnapshot returns a pending snapshot by default", () =>
   Effect.gen(function* () {
-    const snapshot = yield* buildInitialPiProviderSnapshot(decodePiSettings({}));
+    const snapshot = yield* buildInitialPiProviderSnapshot(piSettings());
     NodeAssert.equal(snapshot.enabled, true);
     NodeAssert.equal(snapshot.status, "warning");
     NodeAssert.equal(snapshot.badgeLabel, "Early Access");
@@ -166,7 +180,7 @@ it.effect("buildInitialPiProviderSnapshot returns a pending snapshot by default"
 it.effect("buildInitialPiProviderSnapshot includes configured custom models", () =>
   Effect.gen(function* () {
     const snapshot = yield* buildInitialPiProviderSnapshot(
-      decodePiSettings({ customModels: ["custom/pi-model"] }),
+      piSettings({ customModels: ["custom/pi-model"] }),
     );
 
     NodeAssert.equal(snapshot.status, "warning");
@@ -177,7 +191,7 @@ it.effect("buildInitialPiProviderSnapshot includes configured custom models", ()
 it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
   it.effect("skips runtime probes when Pi is disabled", () =>
     Effect.gen(function* () {
-      const snapshot = yield* checkPiProviderStatus(decodePiSettings({ enabled: false }));
+      const snapshot = yield* checkPiProviderStatus(piSettings({ enabled: false }));
 
       NodeAssert.equal(snapshot.enabled, false);
       NodeAssert.equal(snapshot.status, "disabled");
@@ -192,12 +206,57 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
         detail: "spawn pi ENOENT",
       });
 
-      const snapshot = yield* checkPiProviderStatus(decodePiSettings({ binaryPath: "pi" }));
+      const snapshot = yield* checkPiProviderStatus(piSettings({ binaryPath: "pi" }));
 
       NodeAssert.equal(snapshot.enabled, true);
       NodeAssert.equal(snapshot.installed, false);
       NodeAssert.equal(snapshot.status, "error");
       NodeAssert.equal(snapshot.message, "Pi CLI (`pi`) is not installed or not on PATH.");
+    }),
+  );
+
+  it.effect("installs Pi and Codex Conversion when both are missing", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.versionError = new PiRuntimeError({
+        operation: "runCommand",
+        detail: "spawn pi ENOENT",
+      });
+      runtimeMock.state.packageList = "User packages:\n";
+
+      const snapshot = yield* checkPiProviderStatus(decodePiSettings({ binaryPath: "pi" }));
+
+      NodeAssert.equal(snapshot.status, "ready");
+      NodeAssert.deepEqual(
+        runtimeMock.state.calls.map((call) => [call.binaryPath, ...call.args]),
+        [
+          ["pi", "--version"],
+          ["npm", "install", "--global", "@earendil-works/pi-coding-agent@latest"],
+          ["pi", "--version"],
+          ["pi", "list", "--no-approve"],
+          ["pi", "install", "npm:@howaboua/pi-codex-conversion", "--no-approve"],
+        ],
+      );
+    }),
+  );
+
+  it.effect("removes Codex Conversion Lite before installing the full package", () =>
+    Effect.gen(function* () {
+      runtimeMock.state.packageList = "User packages:\n  npm:@howaboua/pi-codex-conversion-lite\n";
+
+      const snapshot = yield* checkPiProviderStatus(
+        decodePiSettings({ binaryPath: "pi", autoInstall: false }),
+      );
+
+      NodeAssert.equal(snapshot.status, "ready");
+      NodeAssert.deepEqual(
+        runtimeMock.state.calls.map((call) => call.args),
+        [
+          ["--version"],
+          ["list", "--no-approve"],
+          ["remove", "npm:@howaboua/pi-codex-conversion-lite", "--no-approve"],
+          ["install", "npm:@howaboua/pi-codex-conversion", "--no-approve"],
+        ],
+      );
     }),
   );
 
@@ -208,12 +267,12 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
         detail: "model list failed",
       });
 
-      const snapshot = yield* checkPiProviderStatus(decodePiSettings({ binaryPath: "pi" }));
+      const snapshot = yield* checkPiProviderStatus(piSettings({ binaryPath: "pi" }));
 
       NodeAssert.equal(snapshot.enabled, true);
       NodeAssert.equal(snapshot.installed, true);
       NodeAssert.equal(snapshot.status, "error");
-      NodeAssert.equal(snapshot.version, "0.4.1");
+      NodeAssert.equal(snapshot.version, "0.84.3");
       NodeAssert.equal(
         snapshot.message,
         "Failed to execute Pi CLI health check: model list failed",
@@ -241,7 +300,7 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
     Effect.gen(function* () {
       runtimeMock.state.versionResult = { stdout: "pi dev build\n", stderr: "", code: 0 };
 
-      const snapshot = yield* checkPiProviderStatus(decodePiSettings({ binaryPath: "pi" }));
+      const snapshot = yield* checkPiProviderStatus(piSettings({ binaryPath: "pi" }));
 
       NodeAssert.equal(snapshot.status, "error");
       NodeAssert.equal(snapshot.version, null);
@@ -258,13 +317,13 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
 
   it.effect("discovers models from RPC and exposes mapped thinking capabilities", () =>
     Effect.gen(function* () {
-      const snapshot = yield* checkPiProviderStatus(decodePiSettings({ binaryPath: "pi" }));
+      const snapshot = yield* checkPiProviderStatus(piSettings({ binaryPath: "pi" }));
       const slugs = snapshot.models.map((model) => model.slug);
 
       NodeAssert.equal(snapshot.enabled, true);
       NodeAssert.equal(snapshot.installed, true);
       NodeAssert.equal(snapshot.status, "ready");
-      NodeAssert.equal(snapshot.version, "0.4.1");
+      NodeAssert.equal(snapshot.version, "0.84.3");
       NodeAssert.equal(snapshot.badgeLabel, "Early Access");
       NodeAssert.deepEqual(slugs, [
         "anthropic/claude-haiku-4-5",
@@ -297,7 +356,7 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
     Effect.gen(function* () {
       runtimeMock.state.modelsData = { models: [] };
 
-      const snapshot = yield* checkPiProviderStatus(decodePiSettings({ binaryPath: "pi" }));
+      const snapshot = yield* checkPiProviderStatus(piSettings({ binaryPath: "pi" }));
 
       NodeAssert.equal(snapshot.installed, true);
       NodeAssert.equal(snapshot.status, "warning");
@@ -312,13 +371,13 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
         detail: "spawn pi ENOENT",
       });
       const errorSnapshot = yield* checkPiProviderStatus(
-        decodePiSettings({ binaryPath: "pi", customModels: ["custom/pi-model"] }),
+        piSettings({ binaryPath: "pi", customModels: ["custom/pi-model"] }),
       );
       runtimeMock.state.versionError = null;
       runtimeMock.state.calls.length = 0;
 
       const successSnapshot = yield* checkPiProviderStatus(
-        decodePiSettings({ binaryPath: "pi", customModels: ["custom/pi-model"] }),
+        piSettings({ binaryPath: "pi", customModels: ["custom/pi-model"] }),
       );
 
       NodeAssert.ok(errorSnapshot.models.some((model) => model.slug === "custom/pi-model"));

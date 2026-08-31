@@ -143,6 +143,8 @@ const makeOpenCodeConfig = (overrides: Partial<OpenCodeSettings>): OpenCodeSetti
 const makePiConfig = (overrides: Partial<PiSettings>): PiSettings => ({
   enabled: false,
   binaryPath: "pi",
+  autoInstall: true,
+  installCodexConversion: true,
   customModels: [],
   ...overrides,
 });

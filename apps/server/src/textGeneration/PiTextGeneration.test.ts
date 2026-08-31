@@ -159,7 +159,10 @@ it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
           body: "Covers provider and adapter flows.",
         });
         NodeAssert.equal(runtimeMock.state.calls.length, 1);
-        NodeAssert.match(String(runtimeMock.state.calls[0]?.stdin), /GitHub pull request content/);
+        NodeAssert.match(
+          String(runtimeMock.state.calls[0]?.stdin),
+          /source control change request content/,
+        );
       }),
     ),
   );
@@ -195,7 +198,10 @@ it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
 
         NodeAssert.deepEqual(title, { title: "Debug Pi provider setup" });
         NodeAssert.equal(runtimeMock.state.calls.length, 1);
-        NodeAssert.match(String(runtimeMock.state.calls[0]?.stdin), /thread titles/);
+        NodeAssert.match(
+          String(runtimeMock.state.calls[0]?.stdin),
+          /recognize this T3 Code thread/,
+        );
       }),
     ),
   );

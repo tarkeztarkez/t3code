@@ -61,7 +61,7 @@ import {
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = ProviderDriverKind.make("pi");
-const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
+const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 const PI_MCP_BRIDGE_TOKEN_ENV = "T3_MCP_BEARER_TOKEN";
 const PI_T3_BROWSER_SYSTEM_PROMPT = `
 ## T3 Code collaborative browser

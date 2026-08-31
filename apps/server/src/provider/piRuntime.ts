@@ -17,8 +17,8 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { isWindowsCommandNotFound } from "../processRunner.ts";
 import { collectStreamAsString } from "./providerSnapshot.ts";
 
-const decodeJsonStringExit = Schema.decodeUnknownExit(Schema.UnknownFromJsonString);
-const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
+const decodeJsonStringExit = Schema.decodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
+const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 function encodeJsonLineExit(value: unknown): Exit.Exit<string, unknown> {
   const result = encodeJsonStringExit(value);

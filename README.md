@@ -2,7 +2,9 @@
 
 T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
+This fork adds Pi to T3 Code's Claude Code, Codex, Cursor, Grok Build, and OpenCode providers.
+
+Pi setup is automatic by default. T3 Code installs `@earendil-works/pi-coding-agent` when `pi` is missing, then installs `@howaboua/pi-codex-conversion` through Pi. This requires Node.js 22.19 or newer and npm on `PATH`. Both install options can be disabled in the Pi provider settings.
 
 ## "Wait, what are you selling me?"
 
@@ -35,7 +37,7 @@ Tip: Use `npx t3@latest --help` for the full CLI reference.
 
 ### Desktop app
 
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
+Install this fork's Windows build from [GitHub Releases](https://github.com/tarkeztarkez/t3code/releases). The packaged updater follows releases from this fork.
 
 #### Windows (`winget`)
 

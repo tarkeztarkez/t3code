@@ -585,13 +585,29 @@ export const PiSettings = makeProviderSettingsSchema(
         providerSettingsForm: { placeholder: "pi", clearWhenEmpty: "omit" },
       }),
     ),
+    autoInstall: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({
+        title: "Install Pi automatically",
+        description:
+          "Install or update @earendil-works/pi-coding-agent with npm when the Pi CLI is missing or too old.",
+      }),
+    ),
+    installCodexConversion: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({
+        title: "Install Codex Conversion",
+        description:
+          "Install @howaboua/pi-codex-conversion in Pi's global package settings when it is missing.",
+      }),
+    ),
     customModels: Schema.Array(Schema.String).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath"],
+    order: ["binaryPath", "autoInstall", "installCodexConversion"],
   },
 );
 export type PiSettings = typeof PiSettings.Type;
@@ -906,6 +922,8 @@ const OpenCodeSettingsPatch = Schema.Struct({
 const PiSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
+  autoInstall: Schema.optionalKey(Schema.Boolean),
+  installCodexConversion: Schema.optionalKey(Schema.Boolean),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
