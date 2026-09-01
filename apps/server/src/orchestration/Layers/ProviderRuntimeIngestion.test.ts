@@ -2603,6 +2603,40 @@ describe("ProviderRuntimeIngestion", () => {
     });
   });
 
+  it("projects account usage limits into a hidden status activity", async () => {
+    const harness = await createHarness();
+
+    harness.emit({
+      type: "account.rate-limits.updated",
+      eventId: asEventId("evt-account-rate-limits-updated"),
+      provider: "codex",
+      createdAt: new Date().toISOString(),
+      threadId: asThreadId("thread-1"),
+      payload: {
+        rateLimits: {
+          rateLimits: {
+            primary: { usedPercent: 25, windowDurationMins: 300 },
+          },
+        },
+      },
+    });
+
+    const thread = await waitForThread(harness.engine, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) => activity.kind === "account-rate-limits.updated",
+      ),
+    );
+
+    expect(
+      thread.activities.find(
+        (activity: ProviderRuntimeTestActivity) => activity.kind === "account-rate-limits.updated",
+      )?.payload,
+    ).toMatchObject({
+      provider: "codex",
+      rateLimits: { rateLimits: { primary: { usedPercent: 25 } } },
+    });
+  });
+
   it("projects Codex camelCase token usage payloads into normalized thread activities", async () => {
     const harness = await createHarness();
     const now = new Date().toISOString();

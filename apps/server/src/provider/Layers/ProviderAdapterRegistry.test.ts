@@ -7,6 +7,7 @@ import { Effect, Layer, Stream } from "effect";
 import { ClaudeAdapter, ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
 import { CodexAdapter, CodexAdapterShape } from "../Services/CodexAdapter.ts";
 import { CursorAdapter, CursorAdapterShape } from "../Services/CursorAdapter.ts";
+import { PiAdapter, PiAdapterShape } from "../Services/PiAdapter.ts";
 import { ProviderAdapterRegistry } from "../Services/ProviderAdapterRegistry.ts";
 import { ProviderAdapterRegistryLive } from "./ProviderAdapterRegistry.ts";
 import { ProviderUnsupportedError } from "../Errors.ts";
@@ -63,6 +64,11 @@ const fakeCursorAdapter: CursorAdapterShape = {
   streamEvents: Stream.empty,
 };
 
+const fakePiAdapter: PiAdapterShape = {
+  ...fakeCursorAdapter,
+  provider: "pi",
+};
+
 const layer = it.layer(
   Layer.mergeAll(
     Layer.provide(
@@ -71,6 +77,7 @@ const layer = it.layer(
         Layer.succeed(CodexAdapter, fakeCodexAdapter),
         Layer.succeed(ClaudeAdapter, fakeClaudeAdapter),
         Layer.succeed(CursorAdapter, fakeCursorAdapter),
+        Layer.succeed(PiAdapter, fakePiAdapter),
       ),
     ),
     NodeServices.layer,
@@ -84,12 +91,14 @@ layer("ProviderAdapterRegistryLive", (it) => {
       const codex = yield* registry.getByProvider("codex");
       const claude = yield* registry.getByProvider("claudeAgent");
       const cursor = yield* registry.getByProvider("cursor");
+      const pi = yield* registry.getByProvider("pi");
       assert.equal(codex, fakeCodexAdapter);
       assert.equal(claude, fakeClaudeAdapter);
       assert.equal(cursor, fakeCursorAdapter);
+      assert.equal(pi, fakePiAdapter);
 
       const providers = yield* registry.listProviders();
-      assert.deepEqual(providers, ["codex", "claudeAgent", "cursor"]);
+      assert.deepEqual(providers, ["codex", "claudeAgent", "cursor", "pi"]);
     }),
   );
 

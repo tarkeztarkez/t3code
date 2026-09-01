@@ -524,6 +524,20 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
       } catch (error) {
         console.log("codex account/read failed", error);
       }
+      try {
+        const rateLimits = await this.sendRequest(context, "account/rateLimits/read", {});
+        this.emitEvent({
+          id: EventId.make(randomUUID()),
+          kind: "notification",
+          provider: "codex",
+          threadId: context.session.threadId,
+          createdAt: new Date().toISOString(),
+          method: "account/rateLimits/updated",
+          payload: rateLimits,
+        });
+      } catch (error) {
+        console.log("codex account/rateLimits/read failed", error);
+      }
 
       const normalizedModel = resolveCodexModelForAccount(
         normalizeCodexModelSlug(input.model),

@@ -52,6 +52,13 @@ const PROVIDER_CUSTOM_MODEL_CONFIG: Record<ProviderKind, ProviderCustomModelConf
     placeholder: "your-cursor-model-slug",
     example: "claude-sonnet-4-6",
   },
+  pi: {
+    provider: "pi",
+    title: "Pi",
+    description: "Save additional Pi model slugs for the picker and `/model` command.",
+    placeholder: "provider/model-id",
+    example: "anthropic/claude-sonnet-4-6",
+  },
 };
 
 export const MODEL_PROVIDER_SETTINGS = Object.values(PROVIDER_CUSTOM_MODEL_CONFIG);
@@ -177,6 +184,12 @@ export function getCustomModelOptionsByProvider(
       providers,
       "cursor",
       selectedProvider === "cursor" ? selectedModel : undefined,
+    ),
+    pi: getAppModelOptions(
+      settings,
+      providers,
+      "pi",
+      selectedProvider === "pi" ? selectedModel : undefined,
     ),
   };
 }

@@ -1,5 +1,5 @@
 import { Effect, Option, Schema, SchemaIssue, Struct } from "effect";
-import { ClaudeModelOptions, CodexModelOptions, CursorModelOptions } from "./model";
+import { ClaudeModelOptions, CodexModelOptions, CursorModelOptions, PiModelOptions } from "./model";
 import { RepositoryIdentity } from "./environment";
 import {
   ApprovalRequestId,
@@ -29,7 +29,7 @@ export const ORCHESTRATION_WS_CHANNELS = {
   domainEvent: "orchestration.domainEvent",
 } as const;
 
-export const ProviderKind = Schema.Literals(["codex", "claudeAgent", "cursor"]);
+export const ProviderKind = Schema.Literals(["codex", "claudeAgent", "cursor", "pi"]);
 export type ProviderKind = typeof ProviderKind.Type;
 export const ProviderApprovalPolicy = Schema.Literals([
   "untrusted",
@@ -68,10 +68,18 @@ export const CursorModelSelection = Schema.Struct({
 });
 export type CursorModelSelection = typeof CursorModelSelection.Type;
 
+export const PiModelSelection = Schema.Struct({
+  provider: Schema.Literal("pi"),
+  model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(PiModelOptions),
+});
+export type PiModelSelection = typeof PiModelSelection.Type;
+
 export const ModelSelection = Schema.Union([
   CodexModelSelection,
   ClaudeModelSelection,
   CursorModelSelection,
+  PiModelSelection,
 ]);
 export type ModelSelection = typeof ModelSelection.Type;
 

@@ -49,6 +49,7 @@ const makeRoutingTextGeneration = Effect.gen(function* () {
     codex,
     claudeAgent: claude,
     cursor,
+    pi: claude,
   };
 
   const route = (provider: TextGenerationProvider) => providerToService[provider];

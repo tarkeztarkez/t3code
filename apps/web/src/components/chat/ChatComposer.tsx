@@ -75,6 +75,7 @@ import {
   renderProviderTraitsPicker,
 } from "./composerProviderRegistry";
 import { ContextWindowMeter } from "./ContextWindowMeter";
+import { UsageLimitsMeter } from "./UsageLimitsMeter";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../vscode-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -100,6 +101,7 @@ import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
 import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
+import { deriveLatestUsageLimits } from "../../lib/rateLimits";
 import { formatProviderSkillDisplayName } from "../../providerSkillPresentation";
 import { searchProviderSkills } from "../../providerSkillSearch";
 
@@ -262,6 +264,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
   activeContextWindow: ReturnType<typeof deriveLatestContextWindowSnapshot>;
+  activeUsageLimits: ReturnType<typeof deriveLatestUsageLimits>;
   isPreparingWorktree: boolean;
   pendingAction: {
     questionIndex: number;
@@ -282,6 +285,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 }) {
   return (
     <>
+      {props.activeUsageLimits ? <UsageLimitsMeter usage={props.activeUsageLimits} /> : null}
       {props.activeContextWindow ? <ContextWindowMeter usage={props.activeContextWindow} /> : null}
       {props.isPreparingWorktree ? (
         <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
@@ -605,6 +609,7 @@ export const ChatComposer = memo(
         claudeAgent:
           providerStatuses.find((provider) => provider.provider === "claudeAgent")?.models ?? [],
         cursor: providerStatuses.find((provider) => provider.provider === "cursor")?.models ?? [],
+        pi: providerStatuses.find((provider) => provider.provider === "pi")?.models ?? [],
       }),
       [providerStatuses],
     );
@@ -638,6 +643,10 @@ export const ChatComposer = memo(
     const activeContextWindow = useMemo(
       () => deriveLatestContextWindowSnapshot(activeThreadActivities ?? []),
       [activeThreadActivities],
+    );
+    const activeUsageLimits = useMemo(
+      () => deriveLatestUsageLimits(activeThreadActivities ?? [], selectedProvider),
+      [activeThreadActivities, selectedProvider],
     );
 
     // ------------------------------------------------------------------
@@ -1975,6 +1984,7 @@ export const ChatComposer = memo(
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     activeContextWindow={activeContextWindow}
+                    activeUsageLimits={activeUsageLimits}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
                     showPlanFollowUpPrompt={

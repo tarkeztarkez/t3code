@@ -1484,13 +1484,14 @@ describe("deriveActiveWorkStartedAt", () => {
 });
 
 describe("PROVIDER_OPTIONS", () => {
-  it("advertises Codex, Claude, and Cursor as available providers", () => {
+  it("advertises Codex, Claude, Cursor, and Pi as available providers", () => {
     const claude = PROVIDER_OPTIONS.find((option) => option.value === "claudeAgent");
     const cursor = PROVIDER_OPTIONS.find((option) => option.value === "cursor");
     expect(PROVIDER_OPTIONS).toEqual([
       { value: "codex", label: "Codex", available: true },
       { value: "claudeAgent", label: "Claude", available: true },
       { value: "cursor", label: "Cursor", available: true },
+      { value: "pi", label: "Pi", available: true },
     ]);
     expect(claude).toEqual({
       value: "claudeAgent",

@@ -8,11 +8,22 @@ export const CLAUDE_CODE_EFFORT_OPTIONS = ["low", "medium", "high", "max", "ultr
 export type ClaudeCodeEffort = (typeof CLAUDE_CODE_EFFORT_OPTIONS)[number];
 export const CURSOR_REASONING_OPTIONS = ["low", "medium", "high", "max", "xhigh"] as const;
 export type CursorReasoningOption = (typeof CURSOR_REASONING_OPTIONS)[number];
+export const PI_REASONING_OPTIONS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+export type PiReasoningOption = (typeof PI_REASONING_OPTIONS)[number];
 
 export type ProviderReasoningEffort =
   | CodexReasoningEffort
   | ClaudeCodeEffort
-  | CursorReasoningOption;
+  | CursorReasoningOption
+  | PiReasoningOption;
 
 export const CodexModelOptions = Schema.Struct({
   reasoningEffort: Schema.optional(Schema.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
@@ -36,10 +47,14 @@ export const CursorModelOptions = Schema.Struct({
 });
 export type CursorModelOptions = typeof CursorModelOptions.Type;
 
+export const PiModelOptions = ClaudeModelOptions;
+export type PiModelOptions = ClaudeModelOptions;
+
 export const ProviderModelOptions = Schema.Struct({
   codex: Schema.optional(CodexModelOptions),
   claudeAgent: Schema.optional(ClaudeModelOptions),
   cursor: Schema.optional(CursorModelOptions),
+  pi: Schema.optional(PiModelOptions),
 });
 export type ProviderModelOptions = typeof ProviderModelOptions.Type;
 
@@ -70,6 +85,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderKind, string> = {
   codex: "gpt-5.4",
   claudeAgent: "claude-sonnet-4-6",
   cursor: "auto",
+  pi: "anthropic/claude-sonnet-4-6",
 };
 
 export const DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
@@ -79,6 +95,7 @@ export const DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER: Record<ProviderKind,
   codex: "gpt-5.4-mini",
   claudeAgent: "claude-haiku-4-5",
   cursor: "composer-2",
+  pi: "anthropic/claude-haiku-4-5",
 };
 
 export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string, string>> = {
@@ -115,6 +132,7 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string,
     "opus-4.5-thinking": "claude-opus-4-5",
     "opus-4.5": "claude-opus-4-5",
   },
+  pi: {},
 };
 
 // ── Provider display names ────────────────────────────────────────────
@@ -123,4 +141,5 @@ export const PROVIDER_DISPLAY_NAMES: Record<ProviderKind, string> = {
   codex: "Codex",
   claudeAgent: "Claude",
   cursor: "Cursor",
+  pi: "Pi",
 };

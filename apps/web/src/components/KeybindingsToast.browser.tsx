@@ -100,6 +100,7 @@ function createBaseServerConfig(): ServerConfig {
         codex: { enabled: true, binaryPath: "", homePath: "", customModels: [] },
         claudeAgent: { enabled: true, binaryPath: "", customModels: [] },
         cursor: { enabled: true, binaryPath: "", apiEndpoint: "", customModels: [] },
+        pi: { enabled: true, binaryPath: "", customModels: [] },
       },
     },
   };

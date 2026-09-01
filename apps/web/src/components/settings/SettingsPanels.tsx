@@ -130,6 +130,13 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     binaryPlaceholder: "Cursor agent binary path",
     binaryDescription: "Path to the Cursor agent binary",
   },
+  {
+    provider: "pi",
+    title: "Pi",
+    binaryPlaceholder: "Pi binary path",
+    binaryDescription:
+      "Path to the Pi Coding Agent binary. T3 Code installs it globally when missing.",
+  },
 ] as const;
 
 const PROVIDER_STATUS_STYLES = {
@@ -453,6 +460,10 @@ export function GeneralSettingsPanel() {
         DEFAULT_UNIFIED_SETTINGS.providers.cursor.binaryPath ||
       settings.providers.cursor.customModels.length > 0,
     ),
+    pi: Boolean(
+      settings.providers.pi.binaryPath !== DEFAULT_UNIFIED_SETTINGS.providers.pi.binaryPath ||
+      settings.providers.pi.customModels.length > 0,
+    ),
   });
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
@@ -460,6 +471,7 @@ export function GeneralSettingsPanel() {
     codex: "",
     claudeAgent: "",
     cursor: "",
+    pi: "",
   });
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>

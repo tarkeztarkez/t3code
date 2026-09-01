@@ -109,11 +109,12 @@ function getProviderStateFromCapabilities(
     : null;
 
   const promptEffort = resolveEffort(caps, rawEffort) ?? null;
-  const normalizedOptions = {
-    codex: normalizeCodexModelOptionsWithCapabilities(caps, providerOptions),
-    cursor: normalizeCursorModelOptionsWithCapabilities(caps, providerOptions),
-    claudeAgent: normalizeClaudeModelOptionsWithCapabilities(caps, providerOptions),
-  }[provider];
+  const normalizedOptions =
+    provider === "codex"
+      ? normalizeCodexModelOptionsWithCapabilities(caps, modelOptions?.codex)
+      : provider === "cursor"
+        ? normalizeCursorModelOptionsWithCapabilities(caps, modelOptions?.cursor)
+        : normalizeClaudeModelOptionsWithCapabilities(caps, modelOptions?.[provider]);
 
   const ultrathinkActive =
     caps.promptInjectedEffortLevels.length > 0 && isClaudeUltrathinkPrompt(prompt);
@@ -146,6 +147,11 @@ const composerProviderRegistry: Record<ProviderKind, ProviderRegistryEntry> = {
     getState: (input) => getProviderStateFromCapabilities(input),
     renderTraitsMenuContent: (input) => renderTraitsControl(TraitsMenuContent, "cursor", input),
     renderTraitsPicker: (input) => renderTraitsControl(TraitsPicker, "cursor", input),
+  },
+  pi: {
+    getState: (input) => getProviderStateFromCapabilities(input),
+    renderTraitsMenuContent: (input) => renderTraitsControl(TraitsMenuContent, "pi", input),
+    renderTraitsPicker: (input) => renderTraitsControl(TraitsPicker, "pi", input),
   },
 };
 
