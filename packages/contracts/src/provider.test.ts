@@ -88,6 +88,27 @@ describe("ProviderSessionStartInput", () => {
       expect(parsed.modelSelection.options?.fastMode).toBe(true);
     }
   });
+
+  it("accepts Pi provider and model options", () => {
+    const parsed = decodeProviderSessionStartInput({
+      threadId: "thread-1",
+      provider: "pi",
+      cwd: "/tmp/workspace",
+      runtimeMode: "full-access",
+      modelSelection: {
+        provider: "pi",
+        model: "anthropic/claude-sonnet-4-6",
+        options: { effort: "high" },
+      },
+    });
+
+    expect(parsed.provider).toBe("pi");
+    expect(parsed.modelSelection?.provider).toBe("pi");
+    expect(parsed.modelSelection?.model).toBe("anthropic/claude-sonnet-4-6");
+    if (parsed.modelSelection?.provider === "pi") {
+      expect(parsed.modelSelection.options?.effort).toBe("high");
+    }
+  });
 });
 
 describe("ProviderSendTurnInput", () => {
