@@ -584,8 +584,8 @@ export const PiSettings = makeProviderSettingsSchema(
     ),
     binaryPath: makeBinaryPathSetting("pi").pipe(
       Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the Pi CLI binary.",
+        title: "External binary path",
+        description: "Keep the default to use the Pi version included with T3 Code.",
         providerSettingsForm: { placeholder: "pi", clearWhenEmpty: "omit" },
       }),
     ),
@@ -595,7 +595,7 @@ export const PiSettings = makeProviderSettingsSchema(
         title: "Install Pi automatically",
         description:
           "Install or update @earendil-works/pi-coding-agent with npm when the Pi CLI is missing or too old.",
-        providerSettingsForm: { control: "switch" },
+        providerSettingsForm: { hidden: true },
       }),
     ),
     installCodexConversion: Schema.Boolean.pipe(
@@ -613,7 +613,7 @@ export const PiSettings = makeProviderSettingsSchema(
     ),
   },
   {
-    order: ["binaryPath", "autoInstall", "installCodexConversion"],
+    order: ["binaryPath", "installCodexConversion", "autoInstall"],
   },
 );
 export type PiSettings = typeof PiSettings.Type;

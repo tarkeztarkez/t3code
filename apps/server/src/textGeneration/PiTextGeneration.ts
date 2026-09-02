@@ -5,7 +5,12 @@ import { TextGenerationError, type ModelSelection, type PiSettings } from "@t3to
 import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@t3tools/shared/git";
 import { extractJsonObject } from "@t3tools/shared/schemaJson";
 
-import { parsePiModelSlug, PiRuntime, piRuntimeErrorDetail } from "../provider/piRuntime.ts";
+import {
+  parsePiModelSlug,
+  type PiCommand,
+  PiRuntime,
+  piRuntimeErrorDetail,
+} from "../provider/piRuntime.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,
@@ -28,6 +33,7 @@ type PiTextGenerationOperation =
 export const makePiTextGeneration = Effect.fn("makePiTextGeneration")(function* (
   piSettings: PiSettings,
   environment?: NodeJS.ProcessEnv,
+  bundledCommand?: PiCommand,
 ) {
   const piRuntime = yield* PiRuntime;
   const resolvedEnvironment = environment ?? process.env;
@@ -49,7 +55,7 @@ export const makePiTextGeneration = Effect.fn("makePiTextGeneration")(function* 
 
     const result = yield* piRuntime
       .runCommand({
-        binaryPath: piSettings.binaryPath,
+        ...(bundledCommand ?? { binaryPath: piSettings.binaryPath }),
         args: [
           "--print",
           "--mode",

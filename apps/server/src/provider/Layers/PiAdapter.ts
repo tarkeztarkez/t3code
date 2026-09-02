@@ -43,11 +43,14 @@ import {
   decodePiSessionStatsExit,
   decodePiStateResponseDataExit,
   parsePiApprovalTitle,
+  parsePiUserInputTitle,
   parsePiModelSlug,
   PI_APPROVAL_TITLE_PREFIX,
-  PI_APPROVAL_EXTENSION_SOURCE,
+  PI_BUNDLED_EXTENSIONS,
+  PI_USER_INPUT_TITLE_PREFIX,
   PiRuntime,
   type PiApprovalRequestPayload,
+  type PiCommand,
   type PiMessageContent,
   type PiRpcEvent,
   type PiRpcHandle,
@@ -112,6 +115,7 @@ interface PiPendingDialog {
   readonly method: string;
   readonly title: string;
   readonly options: ReadonlyArray<string>;
+  readonly question?: UserInputQuestion;
 }
 
 type PiExtensionUiRequestEvent = Extract<PiRpcEvent, { readonly type: "extension_ui_request" }>;
@@ -125,6 +129,7 @@ interface PiSessionContext {
   currentModelSlug: string | undefined;
   currentThinking: string | undefined;
   lastStopReason: string | undefined;
+  lastErrorMessage: string | undefined;
   messageSequence: number;
   toolSequence: number;
   compactionSequence: number;
@@ -138,6 +143,7 @@ export interface PiAdapterLiveOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+  readonly command?: PiCommand;
 }
 
 type EventBaseInput = {
@@ -262,6 +268,7 @@ function tokenUsageFromStats(stats: PiSessionStats): ThreadTokenUsageSnapshot | 
 }
 
 function dialogQuestion(uiRequestId: string, dialog: PiPendingDialog): UserInputQuestion {
+  if (dialog.question) return dialog.question;
   const options =
     dialog.method === "confirm"
       ? [
@@ -369,14 +376,30 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           }),
       ),
     );
-    const approvalExtensionPath = path.join(extensionDir, "t3-approvals.ts");
-    yield* fs.writeFileString(approvalExtensionPath, PI_APPROVAL_EXTENSION_SOURCE).pipe(
+    yield* Effect.forEach(
+      PI_BUNDLED_EXTENSIONS,
+      (extension) =>
+        fs.writeFileString(path.join(extensionDir, extension.fileName), extension.source),
+      { discard: true },
+    ).pipe(
       Effect.mapError(
         (cause) =>
           new ProviderAdapterRequestError({
             provider: PROVIDER,
             method: "writeFileString",
-            detail: "Failed to write Pi approval extension.",
+            detail: "Failed to write bundled Pi extensions.",
+            cause,
+          }),
+      ),
+    );
+    const userExtensionsPath = path.join(serverConfig.stateDir, "pi-extensions");
+    yield* fs.makeDirectory(userExtensionsPath, { recursive: true }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProviderAdapterRequestError({
+            provider: PROVIDER,
+            method: "makeDirectory",
+            detail: "Failed to create the Pi user extensions directory.",
             cause,
           }),
       ),
@@ -686,6 +709,41 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         });
         return;
       }
+      const structuredQuestion = method === "select" ? parsePiUserInputTitle(title) : null;
+      if (structuredQuestion) {
+        const dialog: PiPendingDialog = {
+          method,
+          title: structuredQuestion.question,
+          options: structuredQuestion.options.map((option) => option.label),
+          question: {
+            id: structuredQuestion.id,
+            header: structuredQuestion.header,
+            question: structuredQuestion.question,
+            options: structuredQuestion.options,
+            multiSelect: false,
+          },
+        };
+        context.pendingDialogs.set(uiRequestId, dialog);
+        yield* emit({
+          ...(yield* buildEventBase({ threadId, turnId, requestId: uiRequestId, raw: event })),
+          type: "user-input.requested",
+          payload: { questions: [dialogQuestion(uiRequestId, dialog)] },
+        });
+        return;
+      }
+      if (method === "select" && title.startsWith(PI_USER_INPUT_TITLE_PREFIX)) {
+        yield* context.rpc.notify({
+          type: "extension_ui_response",
+          id: uiRequestId,
+          cancelled: true,
+        });
+        yield* emit({
+          ...(yield* buildEventBase({ threadId, turnId, raw: event })),
+          type: "runtime.warning",
+          payload: { message: "Cancelled malformed Pi user-input dialog." },
+        });
+        return;
+      }
 
       if (method === "input" || method === "editor") {
         yield* context.rpc.notify({
@@ -764,6 +822,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           const message = event.message;
           if (message.role !== "assistant") break;
           context.lastStopReason = message.stopReason;
+          context.lastErrorMessage = message.errorMessage;
           const text = textFromContentBlocks(message.content);
           if (text.length > 0) {
             yield* emit({
@@ -834,13 +893,21 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           if (context.activeTurnId !== endedTurnId) break;
           context.activeTurnId = undefined;
           const failed = context.lastStopReason === "error";
+          const errorMessage = context.lastErrorMessage;
           context.lastStopReason = undefined;
+          context.lastErrorMessage = undefined;
           yield* updateProviderSession(context, { status: "ready" }, { clearActiveTurnId: true });
           yield* emit({
             ...(yield* buildEventBase({ threadId, turnId: endedTurnId })),
             type: "turn.completed",
             payload: failed
-              ? { state: "failed", errorMessage: "Pi reported an error while completing the turn." }
+              ? {
+                  state: "failed",
+                  errorMessage: nonEmptyDetail(
+                    errorMessage,
+                    "Pi reported an error while completing the turn.",
+                  ),
+                }
               : { state: "completed" },
           });
           yield* emitTokenUsage(context);
@@ -975,14 +1042,16 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
             ? { ...(options?.environment ?? process.env), ...bridge.environment }
             : options?.environment;
           return {
-            binaryPath: piSettings.binaryPath,
+            binaryPath: options?.command?.binaryPath ?? piSettings.binaryPath,
+            ...(options?.command?.argsPrefix ? { argsPrefix: options.command.argsPrefix } : {}),
             cwd: directory,
             ...(spawnEnvironment ? { environment: spawnEnvironment } : {}),
             runtimeMode: input.runtimeMode,
+            noExtensions: true,
             sessionName: `T3 Code ${input.threadId}`,
             ...(input.modelSelection ? { modelSlug: input.modelSelection.model } : {}),
             ...(thinkingLevel ? { thinkingLevel } : {}),
-            approvalExtensionPath,
+            extensionPaths: [extensionDir, userExtensionsPath],
             ...(bridge
               ? {
                   mcpConfigPath: bridge.configPath,
@@ -1099,6 +1168,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           currentModelSlug: input.modelSelection?.model,
           currentThinking: thinkingLevel,
           lastStopReason: undefined,
+          lastErrorMessage: undefined,
           messageSequence: 0,
           toolSequence: 0,
           compactionSequence: 0,
@@ -1205,6 +1275,8 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
       }
 
       context.activeTurnId = turnId;
+      context.lastStopReason = undefined;
+      context.lastErrorMessage = undefined;
       yield* updateProviderSession(
         context,
         {
@@ -1267,6 +1339,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           .pipe(Effect.ignore({ log: true }));
         context.activeTurnId = undefined;
         context.lastStopReason = undefined;
+        context.lastErrorMessage = undefined;
         yield* updateProviderSession(context, { status: "ready" }, { clearActiveTurnId: true });
         if (abortedTurnId) {
           yield* emit({
@@ -1320,7 +1393,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         });
       }
       context.pendingDialogs.delete(requestId);
-      const rawAnswer = answers[requestId];
+      const rawAnswer = answers[dialog.question?.id ?? requestId];
       const answer = Array.isArray(rawAnswer)
         ? rawAnswer.find((value): value is string => typeof value === "string")
         : typeof rawAnswer === "string"

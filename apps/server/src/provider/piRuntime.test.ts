@@ -18,6 +18,7 @@ import {
   PI_APPROVAL_OPTION_ALLOW_ALWAYS,
   PI_APPROVAL_OPTION_DENY,
   PI_APPROVAL_TITLE_PREFIX,
+  PI_REQUEST_USER_INPUT_EXTENSION_SOURCE,
   spawnPiRpcSession,
   toPiApprovalSelection,
 } from "./piRuntime.ts";
@@ -223,6 +224,19 @@ describe("parsePiApprovalTitle", () => {
     expect(parsePiApprovalTitle("Allow dangerous command?")).toBeNull();
     expect(parsePiApprovalTitle(`${PI_APPROVAL_TITLE_PREFIX}not-json`)).toBeNull();
     expect(parsePiApprovalTitle(undefined)).toBeNull();
+  });
+});
+
+describe("bundled Pi extensions", () => {
+  it("serializes request-user-input as a self-contained extension", () => {
+    let registeredToolName: string | undefined;
+    const load = new Function(
+      PI_REQUEST_USER_INPUT_EXTENSION_SOURCE.replace(/^export default /, "return "),
+    ) as () => (pi: { registerTool: (tool: { name: string }) => void }) => void;
+
+    load()({ registerTool: (tool) => (registeredToolName = tool.name) });
+
+    expect(registeredToolName).toBe("request_user_input");
   });
 });
 

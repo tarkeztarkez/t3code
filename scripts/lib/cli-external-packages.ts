@@ -68,6 +68,8 @@ export const CLI_EXTERNAL_PACKAGE_PREFIXES = [
   ...CLI_BUILD_ONLY_EXTERNAL_PREFIXES,
 ] as const;
 
+const CLI_RUNTIME_PAYLOAD_PACKAGES = ["@earendil-works/pi-coding-agent"] as const;
+
 export function isRuntimeExternalCliDependency(id: string): boolean {
   return CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix));
 }
@@ -97,7 +99,11 @@ export function selectCliRuntimeExternalDependencies(
   dependencies: Readonly<Record<string, string>>,
 ): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(dependencies).filter(([name]) => isRuntimeExternalCliDependency(name)),
+    Object.entries(dependencies).filter(
+      ([name]) =>
+        isRuntimeExternalCliDependency(name) ||
+        CLI_RUNTIME_PAYLOAD_PACKAGES.some((packageName) => name === packageName),
+    ),
   );
 }
 

@@ -15,6 +15,8 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { isWindowsCommandNotFound } from "../processRunner.ts";
+import requestUserInput from "./pi/extensions/request-user-input.ts";
+import t3codeApprovals from "./pi/extensions/t3-approvals.ts";
 import { collectStreamAsString } from "./providerSnapshot.ts";
 
 const decodeJsonStringExit = Schema.decodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
@@ -59,8 +61,14 @@ export interface PiCommandResult {
   readonly code: number;
 }
 
+export interface PiCommand {
+  readonly binaryPath: string;
+  readonly argsPrefix?: ReadonlyArray<string>;
+}
+
 export const runPiCommand = (input: {
   readonly binaryPath: string;
+  readonly argsPrefix?: ReadonlyArray<string>;
   readonly args: ReadonlyArray<string>;
   readonly environment?: NodeJS.ProcessEnv;
   readonly cwd?: string;
@@ -70,7 +78,7 @@ export const runPiCommand = (input: {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const spawnCommand = yield* resolveSpawnCommand(
       input.binaryPath,
-      input.args,
+      [...(input.argsPrefix ?? []), ...input.args],
       input.environment ? { env: input.environment } : {},
     );
     const child = yield* spawner.spawn(
@@ -143,40 +151,47 @@ export const PI_APPROVAL_OPTION_ALLOW = "allow";
 export const PI_APPROVAL_OPTION_ALLOW_ALWAYS = "allow-always";
 export const PI_APPROVAL_OPTION_DENY = "deny";
 export const PI_RUNTIME_MODE_ENV = "T3CODE_PI_RUNTIME_MODE";
+export const PI_USER_INPUT_TITLE_PREFIX = "T3_USER_INPUT ";
 
-export const PI_APPROVAL_EXTENSION_SOURCE = `\
-const MODE = process.env["${PI_RUNTIME_MODE_ENV}"] ?? "approval-required";
+export const PI_APPROVAL_EXTENSION_SOURCE = `export default ${t3codeApprovals.toString()};\n`;
+export const PI_REQUEST_USER_INPUT_EXTENSION_SOURCE = `export default ${requestUserInput.toString()};\n`;
+export const PI_BUNDLED_EXTENSIONS = [
+  { fileName: "t3-approvals.ts", source: PI_APPROVAL_EXTENSION_SOURCE },
+  { fileName: "request-user-input.ts", source: PI_REQUEST_USER_INPUT_EXTENSION_SOURCE },
+] as const;
 
-export default function t3codeApprovals(pi) {
-  const alwaysAllowed = new Set();
-  pi.on("tool_call", async (event, ctx) => {
-    if (MODE === "full-access") return;
-    const tool = event.toolName;
-    const isEditTool = tool === "edit" || tool === "write" || tool === "multiedit" || tool === "patch";
-    const gated = tool === "bash" || (isEditTool && MODE !== "auto-accept-edits");
-    if (!gated || alwaysAllowed.has(tool)) return;
-    const input = event.input ?? {};
-    const detail =
-      tool === "bash" ? String(input.command ?? "") : String(input.path ?? input.file_path ?? "");
-    const choice = await ctx.ui.select(
-      "${PI_APPROVAL_TITLE_PREFIX}" + JSON.stringify({ version: ${PI_APPROVAL_PROTOCOL_VERSION}, tool, detail }),
-      ["${PI_APPROVAL_OPTION_ALLOW}", "${PI_APPROVAL_OPTION_ALLOW_ALWAYS}", "${PI_APPROVAL_OPTION_DENY}"],
-    );
-    if (choice === "${PI_APPROVAL_OPTION_ALLOW_ALWAYS}") {
-      alwaysAllowed.add(tool);
-      return;
-    }
-    if (choice === "${PI_APPROVAL_OPTION_ALLOW}") return;
-    return {
-      block: true,
-      reason:
-        choice === "${PI_APPROVAL_OPTION_DENY}"
-          ? "The user denied this action."
-          : "The approval request was cancelled.",
-    };
-  });
+const PiUserInputTitlePayload = Schema.Struct({
+  version: Schema.Literal(1),
+  id: Schema.String,
+  header: Schema.String,
+  question: Schema.String,
+  options: Schema.Array(
+    Schema.Struct({
+      label: Schema.String,
+      description: Schema.String,
+    }),
+  ),
+});
+
+export function parsePiUserInputTitle(title: unknown): typeof PiUserInputTitlePayload.Type | null {
+  if (typeof title !== "string" || !title.startsWith(PI_USER_INPUT_TITLE_PREFIX)) return null;
+  const decoded = Schema.decodeUnknownExit(Schema.fromJsonString(PiUserInputTitlePayload))(
+    title.slice(PI_USER_INPUT_TITLE_PREFIX.length),
+  );
+  if (Exit.isFailure(decoded)) return null;
+  const question = decoded.value;
+  if (
+    !question.id.trim() ||
+    !question.header.trim() ||
+    !question.question.trim() ||
+    question.options.length === 0 ||
+    question.options.some((option) => !option.label.trim() || !option.description.trim()) ||
+    new Set(question.options.map((option) => option.label)).size !== question.options.length
+  ) {
+    return null;
+  }
+  return question;
 }
-`;
 
 export interface PiApprovalRequestPayload {
   readonly tool: string;
@@ -276,6 +291,7 @@ export type PiSessionStats = typeof PiSessionStats.Type;
 export const PiThreadMessage = Schema.Struct({
   role: Schema.String,
   stopReason: Schema.optionalKey(Schema.String),
+  errorMessage: Schema.optionalKey(Schema.String),
   content: Schema.optionalKey(PiMessageContent),
 });
 export type PiThreadMessage = typeof PiThreadMessage.Type;
@@ -414,13 +430,15 @@ export interface PiRpcHandle {
 
 export interface SpawnPiRpcInput {
   readonly binaryPath: string;
+  readonly argsPrefix?: ReadonlyArray<string>;
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv;
   readonly runtimeMode: RuntimeMode;
   readonly sessionName?: string;
   readonly modelSlug?: string;
   readonly thinkingLevel?: string;
-  readonly approvalExtensionPath?: string;
+  readonly extensionPaths?: ReadonlyArray<string>;
+  readonly noExtensions?: boolean;
   readonly noSession?: boolean;
   readonly noTools?: boolean;
   readonly mcpConfigPath?: string;
@@ -440,8 +458,10 @@ export const spawnPiRpcSession = (
     const parsedModel = parsePiModelSlug(input.modelSlug);
 
     const args = [
+      ...(input.argsPrefix ?? []),
       "--mode",
       "rpc",
+      ...(input.noExtensions ? ["--no-extensions"] : []),
       ...(input.noSession ? ["--no-session"] : []),
       ...(input.noTools ? ["--no-tools"] : []),
       ...(input.mcpConfigPath ? ["--mcp-config", input.mcpConfigPath] : []),
@@ -449,9 +469,7 @@ export const spawnPiRpcSession = (
       ...(input.sessionName ? ["--name", input.sessionName] : []),
       ...(parsedModel ? ["--provider", parsedModel.provider, "--model", parsedModel.modelId] : []),
       ...(input.thinkingLevel ? ["--thinking", input.thinkingLevel] : []),
-      ...(input.approvalExtensionPath && input.runtimeMode !== "full-access"
-        ? ["--extension", input.approvalExtensionPath]
-        : []),
+      ...(input.extensionPaths ?? []).flatMap((extensionPath) => ["--extension", extensionPath]),
     ];
     const environment = {
       ...input.environment,
@@ -668,6 +686,7 @@ export const spawnPiRpcSession = (
 export interface PiRuntimeShape {
   readonly runCommand: (input: {
     readonly binaryPath: string;
+    readonly argsPrefix?: ReadonlyArray<string>;
     readonly args: ReadonlyArray<string>;
     readonly environment?: NodeJS.ProcessEnv;
     readonly cwd?: string;

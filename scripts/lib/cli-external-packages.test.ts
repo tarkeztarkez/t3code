@@ -72,12 +72,14 @@ describe("selectCliRuntimeExternalDependencies", () => {
   it("keeps only runtime-external dependency roots for the Windows sidecar", () => {
     assert.deepStrictEqual(
       selectCliRuntimeExternalDependencies({
+        "@earendil-works/pi-coding-agent": "0.84.4",
         "@effect/platform-bun": "1.0.0",
         "@ff-labs/fff-node": "2.0.0",
         effect: "3.0.0",
         "node-pty": "4.0.0",
       }),
       {
+        "@earendil-works/pi-coding-agent": "0.84.4",
         "@ff-labs/fff-node": "2.0.0",
         "node-pty": "4.0.0",
       },
@@ -87,7 +89,7 @@ describe("selectCliRuntimeExternalDependencies", () => {
   it("selects every external root declared by the server", () => {
     assert.deepStrictEqual(
       Object.keys(selectCliRuntimeExternalDependencies(serverPackageJson.dependencies)).sort(),
-      ["@ff-labs/fff-node", "msgpackr-extract", "node-pty"],
+      ["@earendil-works/pi-coding-agent", "@ff-labs/fff-node", "msgpackr-extract", "node-pty"],
     );
   });
 });

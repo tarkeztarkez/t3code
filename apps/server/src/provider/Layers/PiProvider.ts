@@ -12,6 +12,7 @@ import {
   PiRuntimeError,
   piRuntimeErrorDetail,
   type PiAvailableModel,
+  type PiCommand,
 } from "../piRuntime.ts";
 import {
   buildSelectOptionDescriptor,
@@ -170,12 +171,14 @@ export const buildInitialPiProviderSnapshot = (
 export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function* (
   piSettings: PiSettings,
   environment?: NodeJS.ProcessEnv,
+  bundledCommand?: PiCommand,
 ): Effect.fn.Return<ServerProviderDraft, never, PiRuntime> {
   const piRuntime = yield* PiRuntime;
   const resolvedEnvironment = withWindowsPiPaths(environment ?? process.env);
   const isWindows = (resolvedEnvironment.OS ?? process.env.OS)?.toLowerCase() === "windows_nt";
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
   const failureDetail = (cause: Cause.Cause<unknown>) => piRuntimeErrorDetail(Cause.squash(cause));
+  const command = bundledCommand ?? { binaryPath: piSettings.binaryPath };
 
   const fallback = (detail: string, version: string | null = null) => {
     const failure = formatPiProbeError(detail);
@@ -208,7 +211,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
 
   const runVersionProbe = () =>
     piRuntime.runCommand({
-      binaryPath: piSettings.binaryPath,
+      ...command,
       args: ["--version"],
       environment: resolvedEnvironment,
     });
@@ -247,7 +250,12 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     });
 
   let versionExit = yield* Effect.exit(runVersionProbe());
-  if (versionExit._tag === "Failure" && piSettings.autoInstall && piSettings.binaryPath === "pi") {
+  if (
+    versionExit._tag === "Failure" &&
+    bundledCommand === undefined &&
+    piSettings.autoInstall &&
+    piSettings.binaryPath === "pi"
+  ) {
     const installExit = yield* Effect.exit(installPi());
     if (installExit._tag === "Failure" || installExit.value.code !== 0) {
       const detail =
@@ -270,7 +278,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
   }
 
   if (piSettings.installCodexConversion && !supportsCodexConversion(version)) {
-    if (piSettings.autoInstall && piSettings.binaryPath === "pi") {
+    if (bundledCommand === undefined && piSettings.autoInstall && piSettings.binaryPath === "pi") {
       const installExit = yield* Effect.exit(installPi());
       if (installExit._tag === "Failure" || installExit.value.code !== 0) {
         const detail =
@@ -293,7 +301,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
   if (piSettings.installCodexConversion) {
     const listExit = yield* Effect.exit(
       piRuntime.runCommand({
-        binaryPath: piSettings.binaryPath,
+        ...command,
         args: ["list", "--no-approve"],
         environment: resolvedEnvironment,
       }),
@@ -309,7 +317,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     if (hasPiPackage(listExit.value.stdout, CODEX_CONVERSION_LITE_PACKAGE)) {
       const removeExit = yield* Effect.exit(
         piRuntime.runCommand({
-          binaryPath: piSettings.binaryPath,
+          ...command,
           args: ["remove", CODEX_CONVERSION_LITE_PACKAGE, "--no-approve"],
           environment: resolvedEnvironment,
         }),
@@ -327,7 +335,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     if (!hasPiPackage(listExit.value.stdout, CODEX_CONVERSION_PACKAGE)) {
       const installExit = yield* Effect.exit(
         piRuntime.runCommand({
-          binaryPath: piSettings.binaryPath,
+          ...command,
           args: ["install", CODEX_CONVERSION_PACKAGE, "--no-approve"],
           environment: resolvedEnvironment,
         }),
@@ -345,7 +353,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     if (!hasPiPackage(listExit.value.stdout, PI_MCP_ADAPTER_PACKAGE)) {
       const installExit = yield* Effect.exit(
         piRuntime.runCommand({
-          binaryPath: piSettings.binaryPath,
+          ...command,
           args: ["install", PI_MCP_ADAPTER_PACKAGE, "--no-approve"],
           environment: resolvedEnvironment,
         }),
@@ -365,10 +373,11 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     Effect.scoped(
       Effect.gen(function* () {
         const rpc = yield* piRuntime.spawnSession({
-          binaryPath: piSettings.binaryPath,
+          ...command,
           cwd: process.cwd(),
           environment: resolvedEnvironment,
           runtimeMode: "full-access",
+          noExtensions: true,
           noSession: true,
           noTools: true,
         });

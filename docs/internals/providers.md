@@ -24,6 +24,10 @@ adapter in a child scope. Adapter implementations live beside them in
 [`ProviderAdapter.ts`][adapter]. Read the driver plus its adapter to see how a specific agent's
 transport, config, and event shapes are mapped.
 
+Pi uses the exact `@earendil-works/pi-coding-agent` version declared by the server package unless
+the provider has an explicit external binary path. The server passes extensions from
+`apps/server/src/provider/pi/extensions/` and `<stateDir>/pi-extensions/` to each Pi session.
+
 ## Registry and routing
 
 Two registries separate configuration from live processes:

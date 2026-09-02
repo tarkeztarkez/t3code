@@ -28,6 +28,7 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import type { PiAdapterShape } from "../Services/PiAdapter.ts";
 import {
   PI_APPROVAL_TITLE_PREFIX,
+  PI_USER_INPUT_TITLE_PREFIX,
   PiRuntime,
   PiRuntimeError,
   type PiRpcEvent,
@@ -306,6 +307,8 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* PiAdapter;
       const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const serverConfig = yield* ServerConfig;
       const threadId = asThreadId("thread-pi-mcp-bridge");
       yield* attachMcpSession(threadId, "bridge-token");
 
@@ -314,7 +317,11 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const input = runtimeMock.state.spawnInputs[0];
       if (!input?.mcpConfigPath) throw new Error("missing MCP config path");
       NodeAssert.match(input.appendSystemPrompt ?? "", /preview_status/);
-      NodeAssert.equal(input.approvalExtensionPath !== undefined, true);
+      NodeAssert.equal(input.extensionPaths?.length, 2);
+      NodeAssert.equal(
+        input.extensionPaths?.includes(path.join(serverConfig.stateDir, "pi-extensions")),
+        true,
+      );
       NodeAssert.equal(input.environment?.T3_MCP_BEARER_TOKEN, "bridge-token");
 
       const rawConfig = yield* fs.readFileString(input.mcpConfigPath!);
@@ -653,6 +660,42 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
     }),
   );
 
+  it.effect("reports the error returned by Pi", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-error");
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(5),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* startPiSession(adapter, threadId);
+      yield* adapter.sendTurn({ threadId, input: "Continue" });
+      const handle = runtimeMock.state.handles[0];
+      if (!handle) throw new Error("missing fake Pi handle");
+
+      yield* Queue.offer(handle.eventsQueue, {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          stopReason: "error",
+          errorMessage: "Codex error: The usage limit has been reached",
+          content: [],
+        },
+      });
+      yield* Queue.offer(handle.eventsQueue, { type: "agent_end" });
+
+      const completed = Array.from(yield* Fiber.join(eventsFiber)).find(
+        (event) => event.type === "turn.completed",
+      );
+      NodeAssert.deepEqual(completed?.payload, {
+        state: "failed",
+        errorMessage: "Codex error: The usage limit has been reached",
+      });
+    }),
+  );
+
   it.effect("classifies MCP tools and gives missing Pi tool ids unique fallback item ids", () =>
     Effect.gen(function* () {
       const adapter = yield* PiAdapter;
@@ -807,6 +850,59 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       NodeAssert.deepEqual(runtimeMock.state.notifications, [
         { type: "extension_ui_response", id: "select-1", value: "Staging" },
         { type: "extension_ui_response", id: "confirm-1", confirmed: false },
+      ]);
+    }),
+  );
+
+  it.effect("round-trips structured Pi questions through T3 user input", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-structured-user-input");
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(4),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* startPiSession(adapter, threadId);
+      const handle = runtimeMock.state.handles[0]!;
+
+      yield* Queue.offer(handle.eventsQueue, {
+        type: "extension_ui_request",
+        id: "question-1",
+        method: "select",
+        title:
+          PI_USER_INPUT_TITLE_PREFIX +
+          '{"version":1,"id":"deployment_target","header":"Deploy","question":"Where should this deploy?","options":[{"label":"Staging","description":"Deploy to staging."},{"label":"Production","description":"Deploy to production."}]}',
+        options: ["Staging", "Production"],
+      });
+      yield* Effect.yieldNow;
+      yield* Effect.yieldNow;
+      yield* adapter.respondToUserInput(threadId, ApprovalRequestId.make("question-1"), {
+        deployment_target: "A private environment",
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(events[2]?.payload, {
+        questions: [
+          {
+            id: "deployment_target",
+            header: "Deploy",
+            question: "Where should this deploy?",
+            options: [
+              { label: "Staging", description: "Deploy to staging." },
+              { label: "Production", description: "Deploy to production." },
+            ],
+            multiSelect: false,
+          },
+        ],
+      });
+      NodeAssert.deepEqual(runtimeMock.state.notifications, [
+        {
+          type: "extension_ui_response",
+          id: "question-1",
+          value: "A private environment",
+        },
       ]);
     }),
   );

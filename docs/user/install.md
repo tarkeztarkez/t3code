@@ -6,7 +6,8 @@ T3 Code is a web and desktop GUI for running coding agents on your machine.
 
 Node.js `^22.16 || ^23.11 || >=24.10` on the machine that runs the T3 Code server.
 
-At least one provider CLI, installed and authenticated. See [Providers](#providers) below.
+At least one provider. T3 Code includes Pi. Other providers require their own installed and
+authenticated CLI. See [Providers](#providers) below.
 
 ## Run Without Installing
 
@@ -61,8 +62,8 @@ application files under `/mnt/c` instead and reinstalls the runtime on the next 
 
 ## Providers
 
-T3 Code drives provider CLIs; it does not ship them. Install the CLI for each provider you want
-to use, then authenticate it.
+T3 Code includes a pinned Pi version. Install the CLI for each other provider you want to use,
+then authenticate it.
 
 | Provider   | CLI                                                   | Default binary | Log in with           |
 | ---------- | ----------------------------------------------------- | -------------- | --------------------- |
@@ -71,6 +72,7 @@ to use, then authenticate it.
 | Cursor     | [Cursor CLI](https://cursor.com/cli)                  | `cursor-agent` | `agent login`         |
 | Grok Build | [Grok Build CLI](https://x.ai/cli)                    | `grok`         | `grok login`          |
 | OpenCode   | [OpenCode](https://opencode.ai)                       | `opencode`     | `opencode auth login` |
+| Pi         | Included with T3 Code                                 | bundled        | Provider-specific     |
 
 Codex and Claude are on by default. Cursor, Grok Build, and OpenCode are off by default; turn
 them on in **Settings** → the provider's card when you want to use them.
@@ -84,6 +86,10 @@ and CLI version.
 
 Run the login command on the machine running the T3 Code server, not on the device you browse
 from.
+
+Pi loads T3 Code's built-in extensions and personal extensions from
+`~/.t3/userdata/pi-extensions/`. A custom `--home-dir` moves that directory with the rest of the
+environment's T3 data.
 
 ### Binary Discovery
 

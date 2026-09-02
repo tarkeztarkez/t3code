@@ -49,14 +49,13 @@ describe("ProviderSettingsForm helpers", () => {
     ]);
   });
 
-  it("renders Pi installation options as enabled switches", () => {
+  it("renders the Pi integrations option as an enabled switch", () => {
     const pi = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("pi")];
     expect(pi).toBeDefined();
 
     expect(
       deriveProviderSettingsFields(pi!).filter((field) => field.key !== "binaryPath"),
     ).toMatchObject([
-      { key: "autoInstall", control: "switch", defaultBooleanValue: true },
       { key: "installCodexConversion", control: "switch", defaultBooleanValue: true },
     ]);
   });
