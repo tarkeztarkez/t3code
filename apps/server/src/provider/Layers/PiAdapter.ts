@@ -392,6 +392,9 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           }),
       ),
     );
+    const bundledExtensionPaths = PI_BUNDLED_EXTENSIONS.map((extension) =>
+      path.join(extensionDir, extension.fileName),
+    );
     const userExtensionsPath = path.join(serverConfig.stateDir, "pi-extensions");
     yield* fs.makeDirectory(userExtensionsPath, { recursive: true }).pipe(
       Effect.mapError(
@@ -1027,6 +1030,20 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         }
 
         const thinkingLevel = getModelSelectionStringOptionValue(input.modelSelection, "thinking");
+        const userExtensionPaths = (yield* fs.readDirectory(userExtensionsPath).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProviderAdapterRequestError({
+                provider: PROVIDER,
+                method: "readDirectory",
+                detail: "Failed to read the Pi user extensions directory.",
+                cause,
+              }),
+          ),
+        ))
+          .filter((entry) => entry.endsWith(".ts") || entry.endsWith(".js"))
+          .map((entry) => path.join(userExtensionsPath, entry));
+        const extensionPaths = [...bundledExtensionPaths, ...userExtensionPaths];
         const mcpBridge = yield* makeMcpBridge(input.threadId);
         const initialBridgeWarning =
           mcpBridge._tag === "Failed"
@@ -1051,7 +1068,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
             sessionName: `T3 Code ${input.threadId}`,
             ...(input.modelSelection ? { modelSlug: input.modelSelection.model } : {}),
             ...(thinkingLevel ? { thinkingLevel } : {}),
-            extensionPaths: [extensionDir, userExtensionsPath],
+            extensionPaths,
             ...(bridge
               ? {
                   mcpConfigPath: bridge.configPath,

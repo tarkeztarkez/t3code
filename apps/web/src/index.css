@@ -2001,13 +2001,14 @@ code {
   position: fixed;
   left: max(1rem, env(safe-area-inset-left));
   bottom: max(1rem, env(safe-area-inset-bottom));
-  z-index: 1000;
+  z-index: 2147483647;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   cursor: grab;
   touch-action: none;
   user-select: none;
+  -webkit-app-region: no-drag;
 }
 
 .agent-pet-shell[data-dragging="true"] {

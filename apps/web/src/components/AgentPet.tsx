@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type PointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { AGENT_PET_ANIMATIONS, type AgentPetState } from "./agentPet.logic";
 
@@ -15,6 +16,7 @@ const PET_FRAME_WIDTH = 96;
 const PET_FRAME_HEIGHT = 104;
 
 type PetPosition = { readonly left: number; readonly top: number };
+type PetDrag = PetPosition & { readonly pointerId: number };
 
 function clampPetPosition(position: PetPosition): PetPosition {
   if (typeof window === "undefined") return position;
@@ -49,7 +51,7 @@ export function AgentPet({
   const [position, setPosition] = useState<PetPosition | null>(null);
   const [dragging, setDragging] = useState(false);
   const [, forceViewportRefresh] = useState(0);
-  const dragOffsetRef = useRef<PetPosition>({ left: 0, top: 0 });
+  const dragRef = useRef<PetDrag | null>(null);
   const animation = AGENT_PET_ANIMATIONS[state];
 
   useEffect(() => {
@@ -77,24 +79,34 @@ export function AgentPet({
   }, []);
 
   const handlePointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    dragOffsetRef.current = { left: event.clientX - rect.left, top: event.clientY - rect.top };
+    dragRef.current = {
+      pointerId: event.pointerId,
+      left: event.clientX - rect.left,
+      top: event.clientY - rect.top,
+    };
     setDragging(true);
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
   }, []);
 
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
-      if (!dragging) return;
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
       persistPosition({
-        left: event.clientX - dragOffsetRef.current.left,
-        top: event.clientY - dragOffsetRef.current.top,
+        left: event.clientX - drag.left,
+        top: event.clientY - drag.top,
       });
     },
-    [dragging, persistPosition],
+    [persistPosition],
   );
 
   const handlePointerUp = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
     setDragging(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -111,18 +123,18 @@ export function AgentPet({
     backgroundImage: `url(${DEFAULT_PET_SPRITESHEET})`,
   } as CSSProperties;
 
-  return (
+  const pet = (
     <div
       aria-label={`Agent companion: ${state}`}
       className="agent-pet-shell"
       data-dragging={dragging}
+      onLostPointerCapture={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       role="group"
       style={shellStyle}
-      title="Przeciągnij mnie myszką"
     >
       <div className="agent-pet-speech" role="status">
         {speech}
@@ -136,4 +148,6 @@ export function AgentPet({
       />
     </div>
   );
+
+  return typeof document === "undefined" ? pet : createPortal(pet, document.body);
 }

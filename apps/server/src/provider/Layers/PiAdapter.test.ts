@@ -303,12 +303,44 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
     }),
   );
 
-  it.effect("passes scoped MCP bridge config and token env, then cleans up on stop", () =>
+  it.effect("passes Pi extension files instead of their containing directories", () =>
     Effect.gen(function* () {
       const adapter = yield* PiAdapter;
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const serverConfig = yield* ServerConfig;
+      const threadId = asThreadId("thread-pi-extension-files");
+      const userExtensionPath = path.join(
+        serverConfig.stateDir,
+        "pi-extensions",
+        "custom-extension.ts",
+      );
+      yield* fs.writeFileString(userExtensionPath, "export default function customExtension() {};");
+      yield* Effect.addFinalizer(() =>
+        fs.remove(userExtensionPath, { force: true }).pipe(Effect.ignore),
+      );
+
+      yield* startPiSession(adapter, threadId);
+
+      const extensionPaths = runtimeMock.state.spawnInputs[0]?.extensionPaths ?? [];
+      NodeAssert.equal(extensionPaths.length, 3);
+      NodeAssert.equal(extensionPaths.includes(userExtensionPath), true);
+      NodeAssert.equal(
+        extensionPaths.includes(path.join(serverConfig.stateDir, "pi-extensions")),
+        false,
+      );
+      NodeAssert.deepEqual(
+        extensionPaths.map((extensionPath) => path.extname(extensionPath)),
+        [".ts", ".ts", ".ts"],
+      );
+    }),
+  );
+
+  it.effect("passes scoped MCP bridge config and token env, then cleans up on stop", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const threadId = asThreadId("thread-pi-mcp-bridge");
       yield* attachMcpSession(threadId, "bridge-token");
 
@@ -318,9 +350,9 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       if (!input?.mcpConfigPath) throw new Error("missing MCP config path");
       NodeAssert.match(input.appendSystemPrompt ?? "", /preview_status/);
       NodeAssert.equal(input.extensionPaths?.length, 2);
-      NodeAssert.equal(
-        input.extensionPaths?.includes(path.join(serverConfig.stateDir, "pi-extensions")),
-        true,
+      NodeAssert.deepEqual(
+        input.extensionPaths?.map((extensionPath) => path.extname(extensionPath)),
+        [".ts", ".ts"],
       );
       NodeAssert.equal(input.environment?.T3_MCP_BEARER_TOKEN, "bridge-token");
 
