@@ -1,7 +1,8 @@
 # Agent pet
 
-Pixelowy Mówca is an animated companion in the desktop and web chat workspace. The pet reacts to the
-active thread without changing the thread or sending anything to the provider:
+Pixelowy Mówca is an animated companion in the bottom-left corner of the desktop and web chat
+workspace. The pet reacts to the active thread without changing the thread or sending anything to
+the provider:
 
 - working while an agent turn is active
 - waiting when an approval or answer is needed

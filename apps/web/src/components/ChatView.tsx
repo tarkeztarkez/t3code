@@ -7286,9 +7286,7 @@ function ChatViewContent(props: ChatViewProps) {
                 loadEarlier={loadEarlierTurns}
               />
 
-              {settings.agentPetEnabled ? (
-                <AgentPet state={agentPetState} bottomOffset={composerOverlayHeight} />
-              ) : null}
+              {settings.agentPetEnabled ? <AgentPet state={agentPetState} /> : null}
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
               {showScrollToBottom && (

@@ -1998,9 +1998,9 @@ code {
    half resolution (96x104 per frame) so every update is a discrete background
    shift rather than a continuously repainted transform. */
 .agent-pet {
-  position: absolute;
-  right: max(1rem, env(safe-area-inset-right));
-  bottom: var(--agent-pet-bottom);
+  position: fixed;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
   z-index: 15;
   width: 96px;
   height: 104px;
