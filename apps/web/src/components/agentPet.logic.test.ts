@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { AGENT_PET_ANIMATIONS, resolveAgentPetState } from "./agentPet.logic";
+import {
+  AGENT_PET_ANIMATIONS,
+  resolveAgentPetSpeech,
+  resolveAgentPetState,
+} from "./agentPet.logic";
 
 describe("resolveAgentPetState", () => {
   const resting = {
@@ -35,6 +39,35 @@ describe("resolveAgentPetState", () => {
         isWorking: true,
       }),
     ).toBe("waiting");
+  });
+});
+
+describe("resolveAgentPetSpeech", () => {
+  it("describes the latest task result", () => {
+    expect(resolveAgentPetSpeech({ latestTurn: null, hasError: false, isWorking: false })).toBe(
+      "Gotowy do pracy.",
+    );
+    expect(
+      resolveAgentPetSpeech({
+        latestTurn: { state: "running", completedAt: null },
+        hasError: false,
+        isWorking: true,
+      }),
+    ).toBe("Pracuję nad zadaniem...");
+    expect(
+      resolveAgentPetSpeech({
+        latestTurn: { state: "completed", completedAt: "2026-01-01T00:00:00.000Z" },
+        hasError: false,
+        isWorking: false,
+      }),
+    ).toBe("Ostatnie zadanie wykonane.");
+    expect(
+      resolveAgentPetSpeech({
+        latestTurn: { state: "error", completedAt: "2026-01-01T00:00:00.000Z" },
+        hasError: false,
+        isWorking: false,
+      }),
+    ).toBe("Ostatnie zadanie: nie udało się.");
   });
 });
 

@@ -1997,11 +1997,38 @@ code {
 /* Agent pets use Codex's fixed 8x9 atlas contract. The atlas is displayed at
    half resolution (96x104 per frame) so every update is a discrete background
    shift rather than a continuously repainted transform. */
-.agent-pet {
+.agent-pet-shell {
   position: fixed;
   left: max(1rem, env(safe-area-inset-left));
   bottom: max(1rem, env(safe-area-inset-bottom));
-  z-index: 15;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.agent-pet-shell[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.agent-pet-speech {
+  max-width: 15rem;
+  margin-bottom: -0.25rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 0.85rem 0.85rem 0.85rem 0.25rem;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  color: var(--foreground);
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  box-shadow: 0 8px 24px color-mix(in srgb, black 14%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.agent-pet {
   width: 96px;
   height: 104px;
   pointer-events: none;
@@ -2113,12 +2140,6 @@ code {
   }
   87.5% {
     background-position: -672px calc(var(--agent-pet-row) * -104px);
-  }
-}
-
-@media (max-width: 639px) {
-  .agent-pet {
-    display: none;
   }
 }
 

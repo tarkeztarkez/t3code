@@ -42,7 +42,35 @@ describe("ContextWindowMeter", () => {
     const markup = renderToStaticMarkup(<ContextWindowMeter usage={usage} />);
 
     expect(markup).toContain('data-close-delay="0"');
+    expect(markup).toContain("100k used");
+    expect(markup).toContain("900k left");
+    expect(markup).toContain("Used");
+    expect(markup).toContain("Remaining");
     expect(markup).not.toContain("Compact context");
+  });
+
+  it("does not invent a remaining balance when the provider omits its context limit", () => {
+    const usageWithoutLimit = deriveLatestContextWindowSnapshot([
+      {
+        id: EventId.make("activity-without-limit"),
+        tone: "info",
+        kind: "context-window.updated",
+        summary: "Context updated",
+        payload: { usedTokens: 42_000 },
+        turnId: TurnId.make("turn-without-limit"),
+        createdAt: "2026-08-24T12:00:00.000Z",
+      },
+    ]);
+
+    if (!usageWithoutLimit) {
+      throw new Error("The no-limit usage fixture did not produce a snapshot.");
+    }
+
+    const markup = renderToStaticMarkup(<ContextWindowMeter usage={usageWithoutLimit} />);
+
+    expect(markup).toContain("42k used");
+    expect(markup).toContain("Unavailable");
+    expect(markup).not.toContain("left");
   });
 
   it("explains why the compact action is disabled", () => {

@@ -1318,23 +1318,17 @@ function ProposedPlanTimelineRow({
 }
 
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const label = row.showThinking ? "Starting agent session" : "Agent working";
+  const label = row.showThinking ? "Starting session…" : "Working…";
 
   return (
-    <div className="py-1">
-      <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-info/20 bg-info/8 px-3 py-1.5 text-sm leading-relaxed text-foreground shadow-sm">
-        <span className="size-2 shrink-0 rounded-full bg-info" aria-hidden="true" />
-        <span className="min-w-0 truncate font-medium">{label}</span>
-        <span className="shrink-0 whitespace-nowrap text-muted-foreground tabular-nums">
-          {row.createdAt ? (
-            <>
-              <span className="text-muted-foreground/60">for </span>
-              <WorkingTimer createdAt={row.createdAt} />
-            </>
-          ) : (
-            "…"
-          )}
-        </span>
+    <div className="py-1.5">
+      <div className="inline-flex max-w-full items-baseline gap-2 px-1 text-sm leading-relaxed text-muted-foreground">
+        <span className="min-w-0 truncate">{label}</span>
+        {row.createdAt ? (
+          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground/70 tabular-nums">
+            <WorkingTimer createdAt={row.createdAt} />
+          </span>
+        ) : null}
       </div>
       {row.showThinking ? (
         <div className="mt-1">

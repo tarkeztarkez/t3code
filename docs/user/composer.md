@@ -35,6 +35,12 @@ On mobile, the model picker shows each OpenCode model's upstream provider, such 
 GitHub Copilot, or OpenCode Zen, beneath its name. Search by that provider name to narrow the list
 when starting a thread or changing an existing thread's model.
 
+On web and desktop, after Codex, Claude, or Pi reports the first usage update for a thread, the
+composer shows how many context-window tokens are used and how many remain. This also works when Pi
+runs a GPT model. Select the indicator for percentages, the model's context limit, and total
+processed tokens. This is the active conversation context, not an account subscription or billing
+balance.
+
 ## Notices above the composer
 
 On web and desktop, loading and syncing statuses fill the available banner width beside the

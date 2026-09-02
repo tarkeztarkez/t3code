@@ -177,7 +177,7 @@ import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavaila
 import { RightPanelTabs, type PullRequestTabStatus } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
 import { AgentPet } from "./AgentPet";
-import { resolveAgentPetState } from "./agentPet.logic";
+import { resolveAgentPetSpeech, resolveAgentPetState } from "./agentPet.logic";
 import {
   deriveAgentPanelModel,
   foldSubagentActivities,
@@ -2463,13 +2463,19 @@ function ChatViewContent(props: ChatViewProps) {
     threadError,
   });
   const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const agentPetHasError = visibleThreadError !== null || activeThread?.session?.status === "error";
   const agentPetState = resolveAgentPetState({
-    hasError: visibleThreadError !== null || activeThread?.session?.status === "error",
+    hasError: agentPetHasError,
     isWaitingForUser: pendingApprovals.length > 0 || pendingUserInputs.length > 0,
     isReviewing:
       rightPanelOpen &&
       (activeRightPanelSurface?.kind === "diff" ||
         activeRightPanelSurface?.kind === "pull-request"),
+    isWorking,
+  });
+  const agentPetSpeech = resolveAgentPetSpeech({
+    latestTurn: activeLatestTurn,
+    hasError: agentPetHasError,
     isWorking,
   });
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
@@ -2478,6 +2484,23 @@ function ChatViewContent(props: ChatViewProps) {
     localDispatchStartedAt,
     latestUserMessageAt,
   );
+  const [sessionStartupFallbackStartedAt, setSessionStartupFallbackStartedAt] = useState<
+    string | null
+  >(null);
+  useEffect(() => {
+    if (isSendBusy || isConnecting) {
+      setSessionStartupFallbackStartedAt(
+        (current) => current ?? localDispatchStartedAt ?? new Date().toISOString(),
+      );
+      return;
+    }
+    if (!threadDetailLoading) {
+      setSessionStartupFallbackStartedAt(null);
+    }
+  }, [isConnecting, isSendBusy, localDispatchStartedAt, threadDetailLoading]);
+  const keepSessionStartupVisible = threadDetailLoading && sessionStartupFallbackStartedAt !== null;
+  const timelineIsWorking = isWorking || keepSessionStartupVisible;
+  const timelineActiveWorkStartedAt = activeWorkStartedAt ?? sessionStartupFallbackStartedAt;
   useEffect(() => {
     attachmentPreviewHandoffByMessageIdRef.current = attachmentPreviewHandoffByMessageId;
   }, [attachmentPreviewHandoffByMessageId]);
@@ -7253,8 +7276,8 @@ function ChatViewContent(props: ChatViewProps) {
                 agentPanelModel={agentPanelModel}
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}
-                isWorking={isWorking}
-                activeTurnStartedAt={activeWorkStartedAt}
+                isWorking={timelineIsWorking}
+                activeTurnStartedAt={timelineActiveWorkStartedAt}
                 listRef={legendListRef}
                 timelineEntries={timelineEntries}
                 latestTurn={activeLatestTurn}
@@ -7286,7 +7309,9 @@ function ChatViewContent(props: ChatViewProps) {
                 loadEarlier={loadEarlierTurns}
               />
 
-              {settings.agentPetEnabled ? <AgentPet state={agentPetState} /> : null}
+              {settings.agentPetEnabled ? (
+                <AgentPet speech={agentPetSpeech} state={agentPetState} />
+              ) : null}
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
               {showScrollToBottom && (

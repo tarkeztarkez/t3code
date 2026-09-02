@@ -36,3 +36,19 @@ export function resolveAgentPetState(input: {
   if (input.isWorking) return "running";
   return "idle";
 }
+
+export function resolveAgentPetSpeech(input: {
+  readonly latestTurn: {
+    readonly state: "running" | "interrupted" | "completed" | "error";
+    readonly completedAt: string | null;
+  } | null;
+  readonly hasError: boolean;
+  readonly isWorking: boolean;
+}): string {
+  if (input.hasError) return "Ostatnie zadanie: nie udało się.";
+  if (input.isWorking || input.latestTurn?.state === "running") return "Pracuję nad zadaniem...";
+  if (!input.latestTurn?.completedAt) return "Gotowy do pracy.";
+
+  if (input.latestTurn.state === "completed") return "Ostatnie zadanie wykonane.";
+  return "Ostatnie zadanie: nie udało się.";
+}

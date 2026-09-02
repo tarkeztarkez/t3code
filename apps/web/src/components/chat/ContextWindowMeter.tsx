@@ -29,6 +29,9 @@ export function ContextWindowMeter(props: {
   const dashOffset = circumference * (1 - normalizedPercentage / 100);
   const totalProcessedTokens = usage.totalProcessedTokens ?? null;
   const showTotalProcessed = totalProcessedTokens !== null && totalProcessedTokens > 0;
+  const usedTokensLabel = formatContextWindowTokens(usage.usedTokens);
+  const remainingTokensLabel =
+    usage.remainingTokens === null ? null : formatContextWindowTokens(usage.remainingTokens);
   const isOverloaded = normalizedPercentage > 90;
   const usageColor = isOverloaded
     ? "var(--color-error)"
@@ -42,16 +45,16 @@ export function ContextWindowMeter(props: {
         closeDelay={onCompact ? 150 : 0}
         render={
           <Button
-            size="icon-sm"
+            size="sm"
             variant="ghost-muted"
-            className="size-7 rounded-full hover:text-muted-foreground data-pressed:text-muted-foreground"
+            className="h-7 gap-1.5 rounded-full px-2 text-[11px] tabular-nums hover:text-muted-foreground data-pressed:text-muted-foreground"
             aria-label={
               usage.maxTokens !== null && usedPercentage
-                ? `Context window ${usedPercentage} used`
-                : `Context window ${formatContextWindowTokens(usage.usedTokens)} tokens used`
+                ? `Context window: ${usedTokensLabel} tokens used, ${remainingTokensLabel} tokens remaining`
+                : `Context window: ${usedTokensLabel} tokens used`
             }
           >
-            <span className="relative flex size-5 items-center justify-center">
+            <span className="relative flex size-4.5 shrink-0 items-center justify-center">
               <svg
                 viewBox="0 0 24 24"
                 className="-rotate-90 absolute inset-0 size-full transform-gpu mx-0!"
@@ -78,6 +81,15 @@ export function ContextWindowMeter(props: {
                   className="transition-[stroke-dashoffset,stroke] duration-500 ease-out motion-reduce:transition-none"
                 />
               </svg>
+            </span>
+            <span className="font-medium text-secondary-label">
+              {usedTokensLabel} used
+              {remainingTokensLabel !== null ? (
+                <>
+                  <span className="mx-1 text-tertiary-label">·</span>
+                  {remainingTokensLabel} left
+                </>
+              ) : null}
             </span>
           </Button>
         }
@@ -122,6 +134,20 @@ export function ContextWindowMeter(props: {
               />
             </div>
           ) : null}
+          <div className="grid grid-cols-2 gap-2 text-[11px] leading-4">
+            <div className="rounded-md bg-muted/45 px-2 py-1.5">
+              <div className="text-secondary-label">Used</div>
+              <div className="font-medium tabular-nums text-muted-foreground">
+                {usedTokensLabel} tokens
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/45 px-2 py-1.5">
+              <div className="text-secondary-label">Remaining</div>
+              <div className="font-medium tabular-nums text-muted-foreground">
+                {remainingTokensLabel === null ? "Unavailable" : `${remainingTokensLabel} tokens`}
+              </div>
+            </div>
+          </div>
           {showTotalProcessed ? (
             <div className="flex items-center justify-between gap-3 text-[11px] leading-4">
               <span className="text-secondary-label">Total processed</span>
