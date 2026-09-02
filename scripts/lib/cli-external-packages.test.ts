@@ -89,7 +89,15 @@ describe("selectCliRuntimeExternalDependencies", () => {
   it("selects every external root declared by the server", () => {
     assert.deepStrictEqual(
       Object.keys(selectCliRuntimeExternalDependencies(serverPackageJson.dependencies)).sort(),
-      ["@earendil-works/pi-coding-agent", "@ff-labs/fff-node", "msgpackr-extract", "node-pty"],
+      [
+        "@earendil-works/pi-coding-agent",
+        "@ff-labs/fff-node",
+        "@howaboua/pi-codex-conversion",
+        "msgpackr-extract",
+        "node-pty",
+        "pi-mcp-adapter",
+        "typebox",
+      ],
     );
   });
 });

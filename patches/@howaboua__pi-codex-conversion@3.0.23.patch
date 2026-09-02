@@ -1,0 +1,65 @@
+diff --git a/dist/adapter/activation/config-store.js b/dist/adapter/activation/config-store.js
+index 3295a3aa7be1a33f8ac5d0bc78b489fa16df9ddf..914c9d1d5351dc9538e6645c364d77801d596478 100644
+--- a/dist/adapter/activation/config-store.js
++++ b/dist/adapter/activation/config-store.js
+@@ -142,12 +142,19 @@ export function hasFolderCodexConversionConfig(cwd, projectTrusted) {
+ function applyProcessOverrides(config, env) {
+     const cacheEnvironment = readCodexCacheEnvironment(env);
+     const fast = env["PI_CODEX_FAST"]?.trim().toLowerCase();
++    const cacheKeepalive = env["PI_CODEX_CACHE_KEEPALIVE"]?.trim().toLowerCase();
++    const cacheKeepaliveOverride = cacheKeepalive === "1" || cacheKeepalive === "true"
++        ? true
++        : cacheKeepalive === "0" || cacheKeepalive === "false"
++            ? false
++            : undefined;
+     const fastOverride = fast === "1" || fast === "true"
+         ? true
+         : fast === "0" || fast === "false"
+             ? false
+             : undefined;
+     if (fastOverride === undefined
++        && cacheKeepaliveOverride === undefined
+         && cacheEnvironment.diagnostics === undefined)
+         return config;
+     return {
+@@ -155,6 +162,7 @@ function applyProcessOverrides(config, env) {
+         openai: {
+             ...config.openai,
+             ...(fastOverride !== undefined ? { fast: fastOverride } : {}),
++            ...(cacheKeepaliveOverride !== undefined ? { cacheKeepalive: cacheKeepaliveOverride } : {}),
+             ...(cacheEnvironment.diagnostics !== undefined
+                 ? { cacheDiagnostics: cacheEnvironment.diagnostics }
+                 : {}),
+diff --git a/src/adapter/activation/config-store.ts b/src/adapter/activation/config-store.ts
+index 2c2e7859d38509a042b7d541ba1deaad83218c10..acd768ae1c3bfede8c6accf1f1ba4f11903ae809 100644
+--- a/src/adapter/activation/config-store.ts
++++ b/src/adapter/activation/config-store.ts
+@@ -149,6 +149,12 @@ export function hasFolderCodexConversionConfig(cwd: string, projectTrusted: bool
+ function applyProcessOverrides(config: CodexConversionConfig, env: NodeJS.ProcessEnv): CodexConversionConfig {
+ 	const cacheEnvironment = readCodexCacheEnvironment(env);
+ 	const fast = env["PI_CODEX_FAST"]?.trim().toLowerCase();
++	const cacheKeepalive = env["PI_CODEX_CACHE_KEEPALIVE"]?.trim().toLowerCase();
++	const cacheKeepaliveOverride = cacheKeepalive === "1" || cacheKeepalive === "true"
++		? true
++		: cacheKeepalive === "0" || cacheKeepalive === "false"
++			? false
++			: undefined;
+ 	const fastOverride = fast === "1" || fast === "true"
+ 		? true
+ 		: fast === "0" || fast === "false"
+@@ -156,6 +162,7 @@ function applyProcessOverrides(config: CodexConversionConfig, env: NodeJS.Proces
+ 			: undefined;
+ 	if (
+ 		fastOverride === undefined
++		&& cacheKeepaliveOverride === undefined
+ 		&& cacheEnvironment.diagnostics === undefined
+ 	) return config;
+ 	return {
+@@ -163,6 +170,7 @@ function applyProcessOverrides(config: CodexConversionConfig, env: NodeJS.Proces
+ 		openai: {
+ 			...config.openai,
+ 			...(fastOverride !== undefined ? { fast: fastOverride } : {}),
++			...(cacheKeepaliveOverride !== undefined ? { cacheKeepalive: cacheKeepaliveOverride } : {}),
+ 			...(cacheEnvironment.diagnostics !== undefined
+ 				? { cacheDiagnostics: cacheEnvironment.diagnostics }
+ 				: {}),

@@ -68,7 +68,12 @@ export const CLI_EXTERNAL_PACKAGE_PREFIXES = [
   ...CLI_BUILD_ONLY_EXTERNAL_PREFIXES,
 ] as const;
 
-const CLI_RUNTIME_PAYLOAD_PACKAGES = ["@earendil-works/pi-coding-agent"] as const;
+const CLI_RUNTIME_PAYLOAD_PACKAGES = [
+  "@earendil-works/pi-coding-agent",
+  "@howaboua/pi-codex-conversion",
+  "pi-mcp-adapter",
+  "typebox",
+] as const;
 
 export function isRuntimeExternalCliDependency(id: string): boolean {
   return CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix));

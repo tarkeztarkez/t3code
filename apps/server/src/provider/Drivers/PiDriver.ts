@@ -12,7 +12,11 @@ import { ServerConfig } from "../../config.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { makePiTextGeneration } from "../../textGeneration/PiTextGeneration.ts";
-import { bundledPiCommand } from "../bundledPi.ts";
+import {
+  bundledPiCommand,
+  bundledPiExtensionPaths,
+  withBundledPiEnvironment,
+} from "../bundledPi.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makePiAdapter } from "../Layers/PiAdapter.ts";
 import {
@@ -97,6 +101,8 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
       const serverSettings = yield* ServerSettingsService;
       const eventLoggers = yield* ProviderEventLoggers;
       const processEnv = withWindowsPiPaths(mergeProviderInstanceEnvironment(environment));
+      const serverConfig = yield* ServerConfig;
+      const bundledEnvironment = withBundledPiEnvironment(processEnv, serverConfig.stateDir);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
@@ -109,6 +115,7 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
       });
       const effectiveConfig = { ...config, enabled } satisfies PiSettings;
       const command = effectiveConfig.binaryPath === "pi" ? yield* bundledPiCommand : undefined;
+      const runtimeEnvironment = command ? bundledEnvironment : processEnv;
       const maintenanceCapabilities = command
         ? makeManualOnlyProviderMaintenanceCapabilities({
             provider: DRIVER_KIND,
@@ -116,12 +123,15 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
           })
         : yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
             binaryPath: effectiveConfig.binaryPath,
-            env: processEnv,
+            env: runtimeEnvironment,
           });
 
       const adapter = yield* makePiAdapter(effectiveConfig, {
         instanceId,
-        environment: processEnv,
+        environment: runtimeEnvironment,
+        ...(command && effectiveConfig.installCodexConversion
+          ? { extensionPaths: bundledPiExtensionPaths }
+          : {}),
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
         ...(command ? { command } : {}),
       }).pipe(
@@ -135,12 +145,17 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv> = {
             }),
         ),
       );
-      const textGeneration = yield* makePiTextGeneration(effectiveConfig, processEnv, command);
-
-      const checkProvider = checkPiProviderStatus(effectiveConfig, processEnv, command).pipe(
-        Effect.map(stampIdentity),
-        Effect.provideService(PiRuntime, piRuntime),
+      const textGeneration = yield* makePiTextGeneration(
+        effectiveConfig,
+        runtimeEnvironment,
+        command,
       );
+
+      const checkProvider = checkPiProviderStatus(
+        effectiveConfig,
+        runtimeEnvironment,
+        command,
+      ).pipe(Effect.map(stampIdentity), Effect.provideService(PiRuntime, piRuntime));
 
       const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<PiSettings>>({

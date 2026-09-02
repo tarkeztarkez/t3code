@@ -312,7 +312,8 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const threadId = asThreadId("thread-pi-extension-files");
       const userExtensionPath = path.join(
         serverConfig.stateDir,
-        "pi-extensions",
+        "pi",
+        "extensions",
         "custom-extension.ts",
       );
       yield* fs.writeFileString(userExtensionPath, "export default function customExtension() {};");
@@ -323,15 +324,15 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       yield* startPiSession(adapter, threadId);
 
       const extensionPaths = runtimeMock.state.spawnInputs[0]?.extensionPaths ?? [];
-      NodeAssert.equal(extensionPaths.length, 3);
+      NodeAssert.equal(extensionPaths.length, 5);
       NodeAssert.equal(extensionPaths.includes(userExtensionPath), true);
       NodeAssert.equal(
-        extensionPaths.includes(path.join(serverConfig.stateDir, "pi-extensions")),
+        extensionPaths.includes(path.join(serverConfig.stateDir, "pi", "extensions")),
         false,
       );
       NodeAssert.deepEqual(
         extensionPaths.map((extensionPath) => path.extname(extensionPath)),
-        [".ts", ".ts", ".ts"],
+        [".ts", ".ts", ".ts", ".ts", ".ts"],
       );
     }),
   );
@@ -349,10 +350,10 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const input = runtimeMock.state.spawnInputs[0];
       if (!input?.mcpConfigPath) throw new Error("missing MCP config path");
       NodeAssert.match(input.appendSystemPrompt ?? "", /preview_status/);
-      NodeAssert.equal(input.extensionPaths?.length, 2);
+      NodeAssert.equal(input.extensionPaths?.length, 4);
       NodeAssert.deepEqual(
         input.extensionPaths?.map((extensionPath) => path.extname(extensionPath)),
-        [".ts", ".ts"],
+        [".ts", ".ts", ".ts", ".ts"],
       );
       NodeAssert.equal(input.environment?.T3_MCP_BEARER_TOKEN, "bridge-token");
 
@@ -373,11 +374,11 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const path = yield* Path.Path;
       const serverConfig = yield* ServerConfig;
       const threadId = asThreadId("thread-pi-mcp-config-failure");
-      yield* fs.remove(path.join(serverConfig.stateDir, "pi-mcp"), {
+      yield* fs.remove(path.join(serverConfig.stateDir, "pi", "mcp"), {
         recursive: true,
         force: true,
       });
-      yield* fs.writeFileString(path.join(serverConfig.stateDir, "pi-mcp"), "blocked");
+      yield* fs.writeFileString(path.join(serverConfig.stateDir, "pi", "mcp"), "blocked");
       yield* attachMcpSession(threadId);
 
       const eventsFiber = yield* adapter.streamEvents.pipe(
@@ -401,7 +402,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       );
       yield* adapter.stopSession(threadId);
       yield* fs
-        .remove(path.join(serverConfig.stateDir, "pi-mcp"), { force: true })
+        .remove(path.join(serverConfig.stateDir, "pi", "mcp"), { force: true })
         .pipe(Effect.ignore);
     }),
   );
@@ -439,7 +440,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
         ["session.started", "thread.started", "runtime.warning"],
       );
       const warningPayload = events.at(-1)?.payload as { readonly message?: string } | undefined;
-      NodeAssert.match(String(warningPayload?.message ?? ""), /pi install npm:pi-mcp-adapter/);
+      NodeAssert.match(String(warningPayload?.message ?? ""), /Enable the bundled Pi integrations/);
       yield* adapter.stopSession(threadId);
     }),
   );
@@ -797,6 +798,63 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       );
       NodeAssert.equal(toolEvents.length, 2);
       NodeAssert.equal(String(toolEvents[0]?.itemId), String(toolEvents[1]?.itemId));
+    }),
+  );
+
+  it.effect("projects bundled Pi subagents into T3 agent task events", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-subagents");
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(4),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* startPiSession(adapter, threadId);
+      const handle = runtimeMock.state.handles[0];
+      if (!handle) throw new Error("missing fake Pi handle");
+
+      const notifyFleet = (status: "running" | "completed", summary?: string) =>
+        Queue.offer(handle.eventsQueue, {
+          type: "extension_ui_request" as const,
+          id: `fleet-${status}`,
+          method: "notify",
+          message: `T3_SUBAGENTS ${JSON.stringify([
+            {
+              id: "/root/reviewer",
+              title: "Review changes",
+              status,
+              model: "openai-codex/gpt-5.6-sol",
+              effort: "low",
+              ...(summary ? { summary } : {}),
+            },
+          ])}`,
+          notifyType: "info",
+        });
+      yield* notifyFleet("running");
+      yield* notifyFleet("completed", "No issues found.");
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(
+        events.map((event) => event.type),
+        ["session.started", "thread.started", "task.started", "task.completed"],
+      );
+      NodeAssert.deepEqual(events[2]?.payload, {
+        taskId: "/root/reviewer",
+        taskType: "subagent",
+        agentKind: "agent",
+        title: "Review changes",
+        model: "openai-codex/gpt-5.6-sol",
+        effort: "low",
+        agentPath: "/root/reviewer",
+        timelineBypass: true,
+        description: "Review changes",
+      });
+      NodeAssert.equal(
+        (events[3]?.payload as { readonly summary?: string } | undefined)?.summary,
+        "No issues found.",
+      );
     }),
   );
 

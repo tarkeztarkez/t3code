@@ -25,8 +25,14 @@ adapter in a child scope. Adapter implementations live beside them in
 transport, config, and event shapes are mapped.
 
 Pi uses the exact `@earendil-works/pi-coding-agent` version declared by the server package unless
-the provider has an explicit external binary path. The server passes extensions from
-`apps/server/src/provider/pi/extensions/` and `<stateDir>/pi-extensions/` to each Pi session.
+the provider has an explicit external binary path. Bundled Pi sets `PI_CODING_AGENT_DIR` to
+`<stateDir>/pi`, so it does not read the user's standalone `~/.pi/agent` configuration. T3 stores
+Pi auth, settings, sessions, subagent state, and user extensions under that directory.
+
+The server passes its approval, user-input, Claude compatibility, and subagent extensions to each
+Pi session. Codex Conversion and Pi MCP Adapter are pinned runtime dependencies rather than packages
+installed into Pi's global settings. The subagent extension sends fleet snapshots over Pi RPC; the
+adapter maps them to `task.*` events used by the shared Agents panel.
 
 ## Registry and routing
 

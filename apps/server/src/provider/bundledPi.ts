@@ -11,6 +11,22 @@ const bundledPiRpcEntryPath = fileURLToPath(
   import.meta.resolve("@earendil-works/pi-coding-agent/rpc-entry"),
 );
 
+export const bundledPiExtensionPaths = [
+  fileURLToPath(import.meta.resolve("@howaboua/pi-codex-conversion")),
+  fileURLToPath(import.meta.resolve("pi-mcp-adapter")),
+] as const;
+
+export function withBundledPiEnvironment(
+  environment: NodeJS.ProcessEnv,
+  stateDir: string,
+): NodeJS.ProcessEnv {
+  return {
+    ...environment,
+    PI_CODING_AGENT_DIR: NodePath.join(stateDir, "pi"),
+    PI_CODEX_CACHE_KEEPALIVE: "1",
+  };
+}
+
 export const bundledPiCommand: Effect.Effect<PiCommand> = Effect.map(
   HostProcessExecutablePath,
   (binaryPath) => ({

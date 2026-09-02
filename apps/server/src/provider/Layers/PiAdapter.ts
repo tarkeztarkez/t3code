@@ -7,6 +7,7 @@ import {
   type ProviderSession,
   RuntimeItemId,
   RuntimeRequestId,
+  RuntimeTaskId,
   ThreadId,
   type ThreadTokenUsageSnapshot,
   TurnId,
@@ -61,11 +62,35 @@ import {
   piRuntimeErrorDetail,
   toPiApprovalSelection,
 } from "../piRuntime.ts";
+import { PI_CODEX_CONVERSION_DEFAULT_CONFIG } from "../pi/default-config.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = ProviderDriverKind.make("pi");
 const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 const PI_MCP_BRIDGE_TOKEN_ENV = "T3_MCP_BEARER_TOKEN";
+const PI_SUBAGENTS_FLEET_PREFIX = "T3_SUBAGENTS ";
+const PiSubagentFleet = Schema.Array(
+  Schema.Struct({
+    id: Schema.String,
+    parentId: Schema.optionalKey(Schema.String),
+    title: Schema.String,
+    status: Schema.Literals([
+      "queued",
+      "starting",
+      "running",
+      "paused",
+      "completed",
+      "failed",
+      "interrupted",
+    ]),
+    model: Schema.optionalKey(Schema.String),
+    effort: Schema.optionalKey(Schema.String),
+    summary: Schema.optionalKey(Schema.String),
+    error: Schema.optionalKey(Schema.String),
+  }),
+);
+const decodePiSubagentFleetExit = Schema.decodeUnknownExit(Schema.fromJsonString(PiSubagentFleet));
+
 const PI_T3_BROWSER_SYSTEM_PROMPT = `
 ## T3 Code collaborative browser
 
@@ -125,6 +150,7 @@ interface PiSessionContext {
   readonly rpc: PiRpcHandle;
   readonly pendingApprovals: Map<string, PiApprovalRequestPayload>;
   readonly pendingDialogs: Map<string, PiPendingDialog>;
+  readonly subagentStatuses: Map<string, string>;
   activeTurnId: TurnId | undefined;
   currentModelSlug: string | undefined;
   currentThinking: string | undefined;
@@ -144,6 +170,7 @@ export interface PiAdapterLiveOptions {
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
   readonly command?: PiCommand;
+  readonly extensionPaths?: ReadonlyArray<string>;
 }
 
 type EventBaseInput = {
@@ -395,7 +422,9 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
     const bundledExtensionPaths = PI_BUNDLED_EXTENSIONS.map((extension) =>
       path.join(extensionDir, extension.fileName),
     );
-    const userExtensionsPath = path.join(serverConfig.stateDir, "pi-extensions");
+    const piAgentDir = path.join(serverConfig.stateDir, "pi");
+    const userExtensionsPath = path.join(piAgentDir, "extensions");
+    const codexConfigPath = path.join(piAgentDir, "pi-codex-conversion.json");
     yield* fs.makeDirectory(userExtensionsPath, { recursive: true }).pipe(
       Effect.mapError(
         (cause) =>
@@ -407,6 +436,11 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           }),
       ),
     );
+
+    const codexConfigExists = yield* fs.exists(codexConfigPath);
+    if (!codexConfigExists) {
+      yield* fs.writeFileString(codexConfigPath, PI_CODEX_CONVERSION_DEFAULT_CONFIG);
+    }
 
     const randomUUIDv4 = crypto.randomUUIDv4.pipe(
       Effect.mapError(
@@ -518,7 +552,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         if (!mcpSession) return { _tag: "Absent" } satisfies PiMcpBridge;
 
         const bridgeId = yield* randomUUIDv4;
-        const bridgeDir = path.join(serverConfig.stateDir, "pi-mcp", bridgeId);
+        const bridgeDir = path.join(piAgentDir, "mcp", bridgeId);
         const configPath = path.join(bridgeDir, "mcp.json");
         const config = {
           settings: {
@@ -586,7 +620,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         type: "runtime.warning",
         payload: {
           message:
-            "Pi MCP bridge unavailable; run `pi install npm:pi-mcp-adapter` for preview browser support.",
+            "Pi MCP bridge unavailable. Enable the bundled Pi integrations for preview browser support.",
           detail: { reason: warning.detail },
         },
       });
@@ -649,6 +683,75 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
       }
 
       if (method === "notify") {
+        const message = event.message ?? "";
+        if (message.startsWith(PI_SUBAGENTS_FLEET_PREFIX)) {
+          const decoded = decodePiSubagentFleetExit(
+            message.slice(PI_SUBAGENTS_FLEET_PREFIX.length),
+          );
+          if (Exit.isFailure(decoded)) {
+            yield* Effect.logWarning("Dropped malformed Pi subagent fleet update.");
+            return;
+          }
+          for (const agent of decoded.value) {
+            const previous = context.subagentStatuses.get(agent.id);
+            if (previous === agent.status) continue;
+            context.subagentStatuses.set(agent.id, agent.status);
+            const linkage = {
+              taskId: RuntimeTaskId.make(agent.id),
+              taskType: "subagent",
+              agentKind: "agent" as const,
+              title: agent.title,
+              ...(agent.parentId ? { parentAgentId: agent.parentId } : {}),
+              ...(agent.model ? { model: agent.model } : {}),
+              ...(agent.effort ? { effort: agent.effort } : {}),
+              agentPath: agent.id,
+              timelineBypass: true,
+            };
+            const terminal =
+              agent.status === "completed" ||
+              agent.status === "failed" ||
+              agent.status === "interrupted";
+            const base = yield* buildEventBase({ threadId, turnId, raw: event });
+            if (previous === undefined) {
+              yield* emit({
+                ...base,
+                type: "task.started",
+                payload: { ...linkage, description: agent.title },
+              });
+            } else if (terminal) {
+              yield* emit({
+                ...base,
+                type: "task.completed",
+                payload: {
+                  ...linkage,
+                  status:
+                    agent.status === "completed"
+                      ? "completed"
+                      : agent.status === "failed"
+                        ? "failed"
+                        : "stopped",
+                  ...(agent.summary ? { summary: agent.summary } : {}),
+                },
+              });
+            } else {
+              yield* emit({
+                ...base,
+                type: "task.updated",
+                payload: {
+                  ...linkage,
+                  status:
+                    agent.status === "queued"
+                      ? "pending"
+                      : agent.status === "paused"
+                        ? "idle"
+                        : "running",
+                  ...(agent.error ? { error: agent.error } : {}),
+                },
+              });
+            }
+          }
+          return;
+        }
         if (event.notifyType === "error") {
           yield* emit({
             ...(yield* buildEventBase({ threadId, turnId, raw: event })),
@@ -1043,7 +1146,11 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         ))
           .filter((entry) => entry.endsWith(".ts") || entry.endsWith(".js"))
           .map((entry) => path.join(userExtensionsPath, entry));
-        const extensionPaths = [...bundledExtensionPaths, ...userExtensionPaths];
+        const extensionPaths = [
+          ...bundledExtensionPaths,
+          ...(options?.extensionPaths ?? []),
+          ...userExtensionPaths,
+        ];
         const mcpBridge = yield* makeMcpBridge(input.threadId);
         const initialBridgeWarning =
           mcpBridge._tag === "Failed"
@@ -1181,6 +1288,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           rpc: started.rpc,
           pendingApprovals: new Map(),
           pendingDialogs: new Map(),
+          subagentStatuses: new Map(),
           activeTurnId: undefined,
           currentModelSlug: input.modelSelection?.model,
           currentThinking: thinkingLevel,

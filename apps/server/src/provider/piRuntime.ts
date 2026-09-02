@@ -15,6 +15,10 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { isWindowsCommandNotFound } from "../processRunner.ts";
+import {
+  PI_CLAUDE_COMPAT_EXTENSION_SOURCE,
+  PI_SUBAGENTS_EXTENSION_SOURCE,
+} from "./pi/extensions/bundled-sources.ts";
 import requestUserInput from "./pi/extensions/request-user-input.ts";
 import t3codeApprovals from "./pi/extensions/t3-approvals.ts";
 import { collectStreamAsString } from "./providerSnapshot.ts";
@@ -150,6 +154,8 @@ export const PI_APPROVAL_PROTOCOL_VERSION = 1;
 export const PI_APPROVAL_OPTION_ALLOW = "allow";
 export const PI_APPROVAL_OPTION_ALLOW_ALWAYS = "allow-always";
 export const PI_APPROVAL_OPTION_DENY = "deny";
+export const PI_AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
+export const PI_CODEX_CACHE_KEEPALIVE_ENV = "PI_CODEX_CACHE_KEEPALIVE";
 export const PI_RUNTIME_MODE_ENV = "T3CODE_PI_RUNTIME_MODE";
 export const PI_USER_INPUT_TITLE_PREFIX = "T3_USER_INPUT ";
 
@@ -158,6 +164,8 @@ export const PI_REQUEST_USER_INPUT_EXTENSION_SOURCE = `export default ${requestU
 export const PI_BUNDLED_EXTENSIONS = [
   { fileName: "t3-approvals.ts", source: PI_APPROVAL_EXTENSION_SOURCE },
   { fileName: "request-user-input.ts", source: PI_REQUEST_USER_INPUT_EXTENSION_SOURCE },
+  { fileName: "claude-compat.ts", source: PI_CLAUDE_COMPAT_EXTENSION_SOURCE },
+  { fileName: "pi-subagents.ts", source: PI_SUBAGENTS_EXTENSION_SOURCE },
 ] as const;
 
 const PiUserInputTitlePayload = Schema.Struct({

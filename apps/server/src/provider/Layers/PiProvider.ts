@@ -36,9 +36,6 @@ const DEFAULT_PI_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities
 const PI_MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
 const PI_CODEX_THINKING_LEVELS = [...PI_THINKING_LEVELS, "xhigh"] as const;
 const PI_NPM_PACKAGE = "@earendil-works/pi-coding-agent@latest";
-const CODEX_CONVERSION_PACKAGE = "npm:@howaboua/pi-codex-conversion";
-const CODEX_CONVERSION_LITE_PACKAGE = "npm:@howaboua/pi-codex-conversion-lite";
-const PI_MCP_ADAPTER_PACKAGE = "npm:pi-mcp-adapter";
 
 export function withWindowsPiPaths(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   if ((environment.OS ?? process.env.OS)?.toLowerCase() !== "windows_nt") return environment;
@@ -54,10 +51,6 @@ export function withWindowsPiPaths(environment: NodeJS.ProcessEnv): NodeJS.Proce
 function supportsCodexConversion(version: string): boolean {
   const [major = 0, minor = 0] = version.split(".").map(Number);
   return major > 0 || minor >= 82;
-}
-
-function hasPiPackage(output: string, source: string): boolean {
-  return output.split(/\r?\n/).some((line) => line.trim() === source);
 }
 
 function titleCaseSlug(value: string): string {
@@ -295,77 +288,6 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     }
     if (!version || !supportsCodexConversion(version)) {
       return fallback("Pi 0.82 or newer is required for Codex Conversion.", version);
-    }
-  }
-
-  if (piSettings.installCodexConversion) {
-    const listExit = yield* Effect.exit(
-      piRuntime.runCommand({
-        ...command,
-        args: ["list", "--no-approve"],
-        environment: resolvedEnvironment,
-      }),
-    );
-    if (listExit._tag === "Failure" || listExit.value.code !== 0) {
-      const detail =
-        listExit._tag === "Failure"
-          ? failureDetail(listExit.cause)
-          : listExit.value.stderr.trim() || `pi list exited with code ${listExit.value.code}`;
-      return fallback(`Failed to inspect Pi packages: ${detail}`, version);
-    }
-
-    if (hasPiPackage(listExit.value.stdout, CODEX_CONVERSION_LITE_PACKAGE)) {
-      const removeExit = yield* Effect.exit(
-        piRuntime.runCommand({
-          ...command,
-          args: ["remove", CODEX_CONVERSION_LITE_PACKAGE, "--no-approve"],
-          environment: resolvedEnvironment,
-        }),
-      );
-      if (removeExit._tag === "Failure" || removeExit.value.code !== 0) {
-        const detail =
-          removeExit._tag === "Failure"
-            ? failureDetail(removeExit.cause)
-            : removeExit.value.stderr.trim() ||
-              `pi remove exited with code ${removeExit.value.code}`;
-        return fallback(`Failed to remove Codex Conversion Lite: ${detail}`, version);
-      }
-    }
-
-    if (!hasPiPackage(listExit.value.stdout, CODEX_CONVERSION_PACKAGE)) {
-      const installExit = yield* Effect.exit(
-        piRuntime.runCommand({
-          ...command,
-          args: ["install", CODEX_CONVERSION_PACKAGE, "--no-approve"],
-          environment: resolvedEnvironment,
-        }),
-      );
-      if (installExit._tag === "Failure" || installExit.value.code !== 0) {
-        const detail =
-          installExit._tag === "Failure"
-            ? failureDetail(installExit.cause)
-            : installExit.value.stderr.trim() ||
-              `pi install exited with code ${installExit.value.code}`;
-        return fallback(`Failed to install Codex Conversion: ${detail}`, version);
-      }
-    }
-
-    if (!hasPiPackage(listExit.value.stdout, PI_MCP_ADAPTER_PACKAGE)) {
-      const installExit = yield* Effect.exit(
-        piRuntime.runCommand({
-          ...command,
-          args: ["install", PI_MCP_ADAPTER_PACKAGE, "--no-approve"],
-          environment: resolvedEnvironment,
-        }),
-      );
-      if (installExit._tag === "Failure" || installExit.value.code !== 0) {
-        const detail =
-          installExit._tag === "Failure"
-            ? failureDetail(installExit.cause)
-            : installExit.value.stderr.trim() ||
-              `pi install exited with code ${installExit.value.code}`;
-        return fallback(`Failed to install Pi MCP Adapter: ${detail}`, version);
-      }
     }
   }
 

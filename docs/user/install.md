@@ -74,6 +74,10 @@ then authenticate it.
 | OpenCode   | [OpenCode](https://opencode.ai)                       | `opencode`     | `opencode auth login` |
 | Pi         | Included with T3 Code                                 | bundled        | Provider-specific     |
 
+Bundled Pi keeps its configuration in `~/.t3/userdata/pi`. It does not load a standalone Pi
+installation's `~/.pi/agent` directory. Pi includes Codex Conversion, the MCP adapter, Claude
+instruction and skill compatibility, and subagents that appear in T3 Code's Agents panel.
+
 Codex and Claude are on by default. Cursor, Grok Build, and OpenCode are off by default; turn
 them on in **Settings** → the provider's card when you want to use them.
 
@@ -88,7 +92,7 @@ Run the login command on the machine running the T3 Code server, not on the devi
 from.
 
 Pi loads T3 Code's built-in extensions and personal extensions from
-`~/.t3/userdata/pi-extensions/`. A custom `--home-dir` moves that directory with the rest of the
+`~/.t3/userdata/pi/extensions/`. A custom `--home-dir` moves that directory with the rest of the
 environment's T3 data.
 
 ### Binary Discovery

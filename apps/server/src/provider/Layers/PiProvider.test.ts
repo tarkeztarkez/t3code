@@ -16,6 +16,7 @@ import {
   type PiRuntimeShape,
   type SpawnPiRpcInput,
 } from "../piRuntime.ts";
+import { withBundledPiEnvironment } from "../bundledPi.ts";
 import {
   buildInitialPiProviderSnapshot,
   checkPiProviderStatus,
@@ -161,6 +162,16 @@ const PiRuntimeTestDouble: PiRuntimeShape = {
 
 const PiProviderTestLayer = Layer.succeed(PiRuntime, PiRuntimeTestDouble);
 
+it("isolates bundled Pi from the user's existing Pi agent directory", () => {
+  const environment = withBundledPiEnvironment(
+    { PI_CODING_AGENT_DIR: "/home/alice/.pi/agent" },
+    "/home/alice/.t3/userdata",
+  );
+
+  NodeAssert.equal(environment.PI_CODING_AGENT_DIR, "/home/alice/.t3/userdata/pi");
+  NodeAssert.equal(environment.PI_CODEX_CACHE_KEEPALIVE, "1");
+});
+
 beforeEach(() => {
   runtimeMock.reset();
 });
@@ -258,9 +269,6 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
           ["pi", "--version"],
           ["npm", "install", "--global", "@earendil-works/pi-coding-agent@latest"],
           ["pi", "--version"],
-          ["pi", "list", "--no-approve"],
-          ["pi", "install", "npm:@howaboua/pi-codex-conversion", "--no-approve"],
-          ["pi", "install", "npm:pi-mcp-adapter", "--no-approve"],
         ],
       );
     }),
@@ -305,28 +313,6 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
           ],
           ["npm", "install", "--global", "@earendil-works/pi-coding-agent@latest"],
           ["pi", "--version"],
-        ],
-      );
-    }),
-  );
-
-  it.effect("removes Codex Conversion Lite before installing the full package", () =>
-    Effect.gen(function* () {
-      runtimeMock.state.packageList = "User packages:\n  npm:@howaboua/pi-codex-conversion-lite\n";
-
-      const snapshot = yield* checkPiProviderStatus(
-        decodePiSettings({ binaryPath: "pi", autoInstall: false }),
-      );
-
-      NodeAssert.equal(snapshot.status, "ready");
-      NodeAssert.deepEqual(
-        runtimeMock.state.calls.map((call) => call.args),
-        [
-          ["--version"],
-          ["list", "--no-approve"],
-          ["remove", "npm:@howaboua/pi-codex-conversion-lite", "--no-approve"],
-          ["install", "npm:@howaboua/pi-codex-conversion", "--no-approve"],
-          ["install", "npm:pi-mcp-adapter", "--no-approve"],
         ],
       );
     }),

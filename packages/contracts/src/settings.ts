@@ -601,9 +601,8 @@ export const PiSettings = makeProviderSettingsSchema(
     installCodexConversion: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({
-        title: "Install Pi integrations",
-        description:
-          "Install Codex Conversion and Pi MCP Adapter in Pi's global package settings when they are missing.",
+        title: "Enable Pi integrations",
+        description: "Load T3 Code's bundled Codex Conversion and Pi MCP Adapter extensions.",
         providerSettingsForm: { control: "switch" },
       }),
     ),
