@@ -19,6 +19,7 @@ type DraftThreadRouteState = {
 };
 
 export type ThreadRouteRenderState = "loading" | "ready" | "missing";
+export type ThreadRouteSurface = "chat" | "loading" | "empty";
 
 export function resolveThreadRouteRenderState(input: {
   bootstrapComplete: boolean;
@@ -37,6 +38,19 @@ export function resolveThreadRouteRenderState(input: {
     return "missing";
   }
   return input.serverThreadShellExists ? "loading" : "missing";
+}
+
+export function resolveThreadRouteSurface(input: {
+  readonly renderState: ThreadRouteRenderState;
+  readonly serverThreadShellExists: boolean;
+}): ThreadRouteSurface {
+  if (input.renderState === "ready") {
+    return "chat";
+  }
+  if (input.renderState === "loading") {
+    return input.serverThreadShellExists ? "chat" : "loading";
+  }
+  return "empty";
 }
 
 export function buildThreadRouteParams(ref: ScopedThreadRef): {

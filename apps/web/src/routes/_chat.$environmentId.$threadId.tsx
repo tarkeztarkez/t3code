@@ -4,7 +4,11 @@ import { useEffect } from "react";
 import ChatView from "../components/ChatView";
 import { threadHasStarted } from "../components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
-import { resolveThreadRouteRef, resolveThreadRouteRenderState } from "../threadRoutes";
+import {
+  resolveThreadRouteRef,
+  resolveThreadRouteRenderState,
+  resolveThreadRouteSurface,
+} from "../threadRoutes";
 import { resolveThreadSyncPhase } from "../threadSync";
 import { SidebarInset } from "~/components/ui/sidebar";
 import {
@@ -15,6 +19,22 @@ import {
 } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
 import { environmentShell } from "../state/shell";
+
+function ThreadRouteLoadingState({ bootstrapComplete }: { readonly bootstrapComplete: boolean }) {
+  return (
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 text-center">
+      <div className="max-w-sm rounded-2xl border border-border/60 bg-card/80 px-5 py-4 text-card-foreground shadow-sm">
+        <div className="mx-auto mb-3 size-2.5 rounded-full bg-info" aria-hidden="true" />
+        <div className="text-sm font-medium">
+          {bootstrapComplete ? "Starting session…" : "Loading workspace…"}
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          The thread is being created and messages will appear here shortly.
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ChatThreadRouteView() {
   const navigate = useNavigate();
@@ -56,6 +76,10 @@ function ChatThreadRouteView() {
   });
   const serverThreadStarted = threadHasStarted(serverThreadDetail);
   const environmentHasAnyThreads = environmentHasServerThreads || environmentHasDraftThreads;
+  const routeSurface = resolveThreadRouteSurface({
+    renderState,
+    serverThreadShellExists: serverThreadShell !== null,
+  });
 
   useEffect(() => {
     if (!threadRef || !bootstrapComplete) {
@@ -80,13 +104,15 @@ function ChatThreadRouteView() {
 
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground md:h-dvh">
-      {renderState === "ready" || (renderState === "loading" && serverThreadShell !== null) ? (
+      {routeSurface === "chat" ? (
         <ChatView
           environmentId={threadRef.environmentId}
           threadId={threadRef.threadId}
           routeKind="server"
           threadSyncPhase={threadSyncPhase}
         />
+      ) : routeSurface === "loading" ? (
+        <ThreadRouteLoadingState bootstrapComplete={bootstrapComplete} />
       ) : null}
     </SidebarInset>
   );

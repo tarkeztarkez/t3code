@@ -9,6 +9,7 @@ import {
   resolveActiveThreadRouteRef,
   resolveThreadRouteRenderState,
   resolveThreadRouteRef,
+  resolveThreadRouteSurface,
   resolveThreadRouteTarget,
 } from "./threadRoutes";
 
@@ -158,5 +159,32 @@ describe("threadRoutes", () => {
         draftThreadExists: false,
       }),
     ).toBe("missing");
+  });
+
+  it("shows an in-page loading state before a new server thread shell arrives", () => {
+    expect(
+      resolveThreadRouteSurface({
+        renderState: "loading",
+        serverThreadShellExists: false,
+      }),
+    ).toBe("loading");
+  });
+
+  it("renders chat once loading has at least a server thread shell", () => {
+    expect(
+      resolveThreadRouteSurface({
+        renderState: "loading",
+        serverThreadShellExists: true,
+      }),
+    ).toBe("chat");
+  });
+
+  it("keeps missing threads empty while the redirect effect runs", () => {
+    expect(
+      resolveThreadRouteSurface({
+        renderState: "missing",
+        serverThreadShellExists: false,
+      }),
+    ).toBe("empty");
   });
 });
