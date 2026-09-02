@@ -1,8 +1,10 @@
 # Agent pet
 
 Pixelowy Mówca is an animated companion in the bottom-left corner of the desktop and web chat
-workspace. The pet reacts to the active thread without changing the thread or sending anything to
-the provider:
+workspace. In the desktop app, the pet uses a transparent always-on-top window, so it remains
+visible over other applications and can be dragged around the screen. In a browser, it stays within
+the T3 Code tab. The pet reacts to the active thread without changing the thread or sending anything
+to the provider:
 
 - working while an agent turn is active
 - waiting when an approval or answer is needed

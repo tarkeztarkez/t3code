@@ -33,8 +33,10 @@ import * as ElectronMenu from "../../electron/ElectronMenu.ts";
 import * as ElectronShell from "../../electron/ElectronShell.ts";
 import * as ElectronTheme from "../../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";
+import { getDesktopUrl } from "../../electron/ElectronProtocol.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
+import { updateAgentPetOverlay } from "../../window/AgentPetOverlay.ts";
 import {
   extractDistroFromUncPath,
   resolveWslPickFolderDefaultPath,
@@ -49,6 +51,15 @@ const ContextMenuPosition = Schema.Struct({
 const ContextMenuInput = Schema.Struct({
   items: Schema.Array(ContextMenuItemSchema),
   position: Schema.optionalKey(ContextMenuPosition),
+});
+
+const AgentPetUpdateInput = Schema.Struct({
+  visible: Schema.Boolean,
+  state: Schema.String,
+  speech: Schema.String,
+  row: Schema.Number,
+  frames: Schema.Number,
+  durationMs: Schema.Number,
 });
 
 function toWebSocketBaseUrl(httpBaseUrl: URL): string {
@@ -82,6 +93,23 @@ export const getWindowFullscreenState = DesktopIpc.makeSyncIpcMethod({
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const window = yield* electronWindow.currentMainOrFirst;
     return Option.isSome(window) && window.value.isFullScreen();
+  }),
+});
+
+export const updateAgentPet = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.UPDATE_AGENT_PET_CHANNEL,
+  payload: AgentPetUpdateInput,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.window.updateAgentPet")(function* (input) {
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    const electronWindow = yield* ElectronWindow.ElectronWindow;
+    const owner = yield* electronWindow.currentMainOrFirst;
+    if (Option.isNone(owner)) return;
+    const spritesheetUrl = new URL(
+      "/pets/pixelowy-mowca/spritesheet.webp",
+      getDesktopUrl(environment.isDevelopment),
+    ).href;
+    yield* Effect.promise(() => updateAgentPetOverlay(owner.value, spritesheetUrl, input));
   }),
 });
 

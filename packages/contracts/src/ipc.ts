@@ -1160,6 +1160,18 @@ export interface DesktopBridge {
   onQuitShortcut?: (listener: (state: "down" | "up") => void) => () => void;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;
+  /**
+   * Mirrors the in-app agent pet into a transparent always-on-top desktop
+   * window. Optional so newer web clients keep working in older shells.
+   */
+  updateAgentPet?: (input: {
+    readonly visible: boolean;
+    readonly state: string;
+    readonly speech: string;
+    readonly row: number;
+    readonly frames: number;
+    readonly durationMs: number;
+  }) => Promise<void>;
   getUpdateState: () => Promise<DesktopUpdateState>;
   setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;

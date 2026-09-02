@@ -53,6 +53,34 @@ export function AgentPet({
   const [, forceViewportRefresh] = useState(0);
   const dragRef = useRef<PetDrag | null>(null);
   const animation = AGENT_PET_ANIMATIONS[state];
+  const updateNativePet =
+    typeof window === "undefined" ? undefined : window.desktopBridge?.updateAgentPet;
+
+  useEffect(() => {
+    if (!updateNativePet) return;
+    void updateNativePet({
+      visible: true,
+      state,
+      speech,
+      row: animation.row,
+      frames: animation.frames,
+      durationMs: animation.durationMs,
+    }).catch(() => undefined);
+  }, [animation.durationMs, animation.frames, animation.row, speech, state, updateNativePet]);
+
+  useEffect(() => {
+    if (!updateNativePet) return;
+    return () => {
+      void updateNativePet({
+        visible: false,
+        state: "idle",
+        speech: "",
+        row: 0,
+        frames: 6,
+        durationMs: 1_100,
+      }).catch(() => undefined);
+    };
+  }, [updateNativePet]);
 
   useEffect(() => {
     setPosition(readStoredPetPosition());
@@ -112,6 +140,8 @@ export function AgentPet({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   }, []);
+
+  if (updateNativePet) return null;
 
   const visiblePosition = position ? clampPetPosition(position) : null;
   const shellStyle = visiblePosition
