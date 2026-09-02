@@ -22,6 +22,7 @@ export function resolveThreadSyncPhase(input: {
   }
 }
 
-export function threadSyncLabel(phase: ThreadSyncPhase): string {
-  return phase === "loading" ? "Loading messages..." : "Syncing messages...";
+export function threadSyncLabel(phase: ThreadSyncPhase, agentWorking: boolean): string {
+  const syncLabel = phase === "loading" ? "Loading messages..." : "Syncing messages...";
+  return agentWorking ? `Agent working · ${syncLabel}` : syncLabel;
 }

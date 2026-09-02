@@ -809,6 +809,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   } = props;
   const activeTasksProgress = props.threadSyncPhase === null ? props.activeTasksProgress : null;
   const activeTaskSteps = props.threadSyncPhase === null ? props.activeTaskSteps : null;
+  const agentWorkingWhileSyncing = phase === "running";
   // ------------------------------------------------------------------
   // Store subscriptions (prompt / images / terminal contexts)
   // ------------------------------------------------------------------
@@ -2886,7 +2887,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeTasksProgress.totalSteps > 0;
   const activityStackContent = hasBannerItems ? (
     props.threadSyncPhase ? (
-      <ComposerActivityRow phase={props.threadSyncPhase} />
+      <ComposerActivityRow phase={props.threadSyncPhase} agentWorking={agentWorkingWhileSyncing} />
     ) : !hasBlockingComposerTopDrawer && activeTasksProgress && activeTaskSteps ? (
       <ComposerTasksContent
         expanded={isTasksDrawerOpen}
@@ -3448,7 +3449,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             <ComposerBanner.Attachment>
               <ComposerBanner.Root data-chat-composer-activity-strip="true">
                 {props.threadSyncPhase ? (
-                  <ComposerActivityRow phase={props.threadSyncPhase} />
+                  <ComposerActivityRow
+                    phase={props.threadSyncPhase}
+                    agentWorking={agentWorkingWhileSyncing}
+                  />
                 ) : (
                   inlineTasksBadge
                 )}

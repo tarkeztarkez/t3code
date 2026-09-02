@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveThreadSyncPhase } from "./threadSync";
+import { resolveThreadSyncPhase, threadSyncLabel } from "./threadSync";
 
 describe("resolveThreadSyncPhase", () => {
   it("loads when only shell data is available", () => {
@@ -38,5 +38,16 @@ describe("resolveThreadSyncPhase", () => {
         status: "live",
       }),
     ).toBeNull();
+  });
+});
+
+describe("threadSyncLabel", () => {
+  it("keeps active work visible while thread details load", () => {
+    expect(threadSyncLabel("loading", true)).toBe("Agent working · Loading messages...");
+    expect(threadSyncLabel("syncing", true)).toBe("Agent working · Syncing messages...");
+  });
+
+  it("shows only synchronization state for an idle thread", () => {
+    expect(threadSyncLabel("loading", false)).toBe("Loading messages...");
   });
 });
