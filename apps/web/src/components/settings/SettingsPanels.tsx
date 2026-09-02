@@ -481,6 +481,9 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Contrast"]
         : []),
       ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? ["Glass opacity"] : []),
+      ...(settings.agentPetEnabled !== DEFAULT_UNIFIED_SETTINGS.agentPetEnabled
+        ? ["Agent pet"]
+        : []),
       ...(settings.environmentIdentificationMode !==
       DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
         ? ["Environment identification"]
@@ -575,6 +578,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.fontSizePrompt,
       settings.fontSizeTerminal,
       settings.glassOpacity,
+      settings.agentPetEnabled,
       settings.enableLegacyTokenStreaming,
       settings.enableProviderUpdateChecks,
       settings.sidebarAutoSettleAfterDays,
@@ -660,6 +664,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
+      agentPetEnabled: DEFAULT_UNIFIED_SETTINGS.agentPetEnabled,
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
@@ -1123,6 +1128,28 @@ export function AppearanceSettingsPanel() {
                 value={settings.glassOpacity}
               />
             </div>
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("agent-pet")}
+          description="Show an animated companion that reacts to the active agent's state."
+          resetAction={
+            settings.agentPetEnabled !== DEFAULT_UNIFIED_SETTINGS.agentPetEnabled ? (
+              <SettingResetButton
+                label="agent pet"
+                onClick={() =>
+                  updateSettings({ agentPetEnabled: DEFAULT_UNIFIED_SETTINGS.agentPetEnabled })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              aria-label="Agent pet"
+              checked={settings.agentPetEnabled}
+              onCheckedChange={(checked) => updateSettings({ agentPetEnabled: Boolean(checked) })}
+            />
           }
         />
 

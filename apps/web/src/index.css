@@ -1993,3 +1993,138 @@ code {
     transform: scaleX(0.9);
   }
 }
+
+/* Agent pets use Codex's fixed 8x9 atlas contract. The atlas is displayed at
+   half resolution (96x104 per frame) so every update is a discrete background
+   shift rather than a continuously repainted transform. */
+.agent-pet {
+  position: absolute;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: var(--agent-pet-bottom);
+  z-index: 15;
+  width: 96px;
+  height: 104px;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: 768px 936px;
+  background-position: 0 calc(var(--agent-pet-row) * -104px);
+  image-rendering: auto;
+  animation-duration: var(--agent-pet-duration);
+  animation-iteration-count: infinite;
+  animation-timing-function: step-end;
+  filter: drop-shadow(0 6px 7px color-mix(in srgb, black 18%, transparent));
+}
+
+.agent-pet[data-frames="4"] {
+  animation-name: agent-pet-frames-4;
+}
+
+.agent-pet[data-frames="5"] {
+  animation-name: agent-pet-frames-5;
+}
+
+.agent-pet[data-frames="6"] {
+  animation-name: agent-pet-frames-6;
+}
+
+.agent-pet[data-frames="8"] {
+  animation-name: agent-pet-frames-8;
+}
+
+@keyframes agent-pet-frames-4 {
+  0%,
+  100% {
+    background-position: 0 calc(var(--agent-pet-row) * -104px);
+  }
+  25% {
+    background-position: -96px calc(var(--agent-pet-row) * -104px);
+  }
+  50% {
+    background-position: -192px calc(var(--agent-pet-row) * -104px);
+  }
+  75% {
+    background-position: -288px calc(var(--agent-pet-row) * -104px);
+  }
+}
+
+@keyframes agent-pet-frames-5 {
+  0%,
+  100% {
+    background-position: 0 calc(var(--agent-pet-row) * -104px);
+  }
+  20% {
+    background-position: -96px calc(var(--agent-pet-row) * -104px);
+  }
+  40% {
+    background-position: -192px calc(var(--agent-pet-row) * -104px);
+  }
+  60% {
+    background-position: -288px calc(var(--agent-pet-row) * -104px);
+  }
+  80% {
+    background-position: -384px calc(var(--agent-pet-row) * -104px);
+  }
+}
+
+@keyframes agent-pet-frames-6 {
+  0%,
+  100% {
+    background-position: 0 calc(var(--agent-pet-row) * -104px);
+  }
+  16.667% {
+    background-position: -96px calc(var(--agent-pet-row) * -104px);
+  }
+  33.333% {
+    background-position: -192px calc(var(--agent-pet-row) * -104px);
+  }
+  50% {
+    background-position: -288px calc(var(--agent-pet-row) * -104px);
+  }
+  66.667% {
+    background-position: -384px calc(var(--agent-pet-row) * -104px);
+  }
+  83.333% {
+    background-position: -480px calc(var(--agent-pet-row) * -104px);
+  }
+}
+
+@keyframes agent-pet-frames-8 {
+  0%,
+  100% {
+    background-position: 0 calc(var(--agent-pet-row) * -104px);
+  }
+  12.5% {
+    background-position: -96px calc(var(--agent-pet-row) * -104px);
+  }
+  25% {
+    background-position: -192px calc(var(--agent-pet-row) * -104px);
+  }
+  37.5% {
+    background-position: -288px calc(var(--agent-pet-row) * -104px);
+  }
+  50% {
+    background-position: -384px calc(var(--agent-pet-row) * -104px);
+  }
+  62.5% {
+    background-position: -480px calc(var(--agent-pet-row) * -104px);
+  }
+  75% {
+    background-position: -576px calc(var(--agent-pet-row) * -104px);
+  }
+  87.5% {
+    background-position: -672px calc(var(--agent-pet-row) * -104px);
+  }
+}
+
+@media (max-width: 639px) {
+  .agent-pet {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-pet {
+    animation: none;
+    background-position: 0 calc(var(--agent-pet-row) * -104px);
+  }
+}

@@ -66,6 +66,14 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
+describe("ClientSettings agent pet", () => {
+  it("is enabled by default and accepts an explicit toggle", () => {
+    expect(decodeClientSettings({}).agentPetEnabled).toBe(true);
+    expect(decodeClientSettings({ agentPetEnabled: false }).agentPetEnabled).toBe(false);
+    expect(decodeClientSettingsPatch({ agentPetEnabled: false }).agentPetEnabled).toBe(false);
+  });
+});
+
 describe("ClientSettings browser recording frame rate", () => {
   it("defaults to 30 fps", () => {
     expect(decodeClientSettings({}).browserRecordingFrameRate).toBe(30);

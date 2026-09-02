@@ -176,6 +176,8 @@ import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
 import { RightPanelTabs, type PullRequestTabStatus } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
+import { AgentPet } from "./AgentPet";
+import { resolveAgentPetState } from "./agentPet.logic";
 import {
   deriveAgentPanelModel,
   foldSubagentActivities,
@@ -2461,6 +2463,15 @@ function ChatViewContent(props: ChatViewProps) {
     threadError,
   });
   const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const agentPetState = resolveAgentPetState({
+    hasError: visibleThreadError !== null || activeThread?.session?.status === "error",
+    isWaitingForUser: pendingApprovals.length > 0 || pendingUserInputs.length > 0,
+    isReviewing:
+      rightPanelOpen &&
+      (activeRightPanelSurface?.kind === "diff" ||
+        activeRightPanelSurface?.kind === "pull-request"),
+    isWorking,
+  });
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -7274,6 +7285,10 @@ function ChatViewContent(props: ChatViewProps) {
                 topFadeEnabled={!hasTimelineTopBanner}
                 loadEarlier={loadEarlierTurns}
               />
+
+              {settings.agentPetEnabled ? (
+                <AgentPet state={agentPetState} bottomOffset={composerOverlayHeight} />
+              ) : null}
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
               {showScrollToBottom && (
