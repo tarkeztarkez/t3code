@@ -53,21 +53,25 @@ jobs:
             platform: win
             target: nsis
             arch: x64
+            rust_target: x86_64-pc-windows-msvc
           - label: Linux x64
             runner: ubuntu-24.04
             platform: linux
             target: AppImage
             arch: x64
+            rust_target: x86_64-unknown-linux-gnu
           - label: macOS arm64
             runner: macos-15
             platform: mac
             target: dmg
             arch: arm64
+            rust_target: aarch64-apple-darwin
           - label: macOS x64
             runner: macos-15
             platform: mac
             target: dmg
             arch: x64
+            rust_target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v6
         with:
@@ -84,6 +88,15 @@ jobs:
 
       - name: Align package versions
         run: node scripts/update-release-package-versions.ts "${{ needs.prepare.outputs.version }}"
+
+      - name: Install Linux packaging tools
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install --yes imagemagick
+
+      - name: Setup Rust target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
 
       - name: Build desktop artifact
         shell: bash
