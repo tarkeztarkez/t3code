@@ -9,6 +9,7 @@ T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provid
 - Before making any changes, run `git pull --ff-only`.
 - After committing changes, always run `git push` to the fork.
 - Do not apply local T3 or Pi state workarounds unless the developer explicitly asks. Fix the repository, commit, and push instead.
+- Fork desktop releases run only from version tags or manual dispatch. Do not restore release builds on every `main` push.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
 

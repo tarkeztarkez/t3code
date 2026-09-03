@@ -2,7 +2,7 @@ name: Release fork desktop apps
 
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
@@ -32,12 +32,18 @@ jobs:
           REQUESTED_VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${REQUESTED_VERSION:-0.1.${GITHUB_RUN_NUMBER}}"
+          if [[ -n "$REQUESTED_VERSION" ]]; then
+            version="$REQUESTED_VERSION"
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.1.${GITHUB_RUN_NUMBER}"
+          fi
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid version: $version" >&2
             exit 1
           fi
-          if [[ -z "$REQUESTED_VERSION" ]]; then
+          if [[ -z "$REQUESTED_VERSION" && "$GITHUB_REF_TYPE" != "tag" ]]; then
             while gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" --silent 2>/dev/null; do
               version="0.1.$(( ${version##*.} + 1 ))"
             done
@@ -66,18 +72,12 @@ jobs:
             target: AppImage
             arch: x64
             rust_target: x86_64-unknown-linux-gnu
-          - label: macOS arm64
+          - label: macOS universal
             runner: macos-15
             platform: mac
             target: dmg
-            arch: arm64
-            rust_target: aarch64-apple-darwin
-          - label: macOS x64
-            runner: macos-15
-            platform: mac
-            target: dmg
-            arch: x64
-            rust_target: x86_64-apple-darwin
+            arch: universal
+            rust_target: aarch64-apple-darwin,x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v6
         with:
@@ -91,6 +91,27 @@ jobs:
           node-version-file: package.json
           cache: true
           run-install: true
+
+      - name: Cache Electron packaging downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: desktop-electron-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Cache Rust build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/resource-monitor/target
+          key: desktop-rust-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'native/resource-monitor/Cargo.toml', 'native/resource-monitor/src/**') }}
 
       - name: Align package versions
         run: node scripts/update-release-package-versions.ts "${{ needs.prepare.outputs.version }}"
@@ -174,11 +195,6 @@ jobs:
               cp "$file" release-publish/
             done
           done
-          if [[ "${{ matrix.platform }}" == "mac" && "${{ matrix.arch }}" == "x64" ]]; then
-            for manifest in release-publish/*-mac.yml; do
-              mv "$manifest" "${manifest%.yml}-x64.yml"
-            done
-          fi
 
       - uses: actions/upload-artifact@v7
         with:
@@ -213,15 +229,6 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
           path: release-assets
-
-      - name: Merge macOS updater manifests
-        shell: bash
-        run: |
-          for x64_manifest in release-assets/*-mac-x64.yml; do
-            arm64_manifest="${x64_manifest%-x64.yml}.yml"
-            node scripts/merge-update-manifests.ts --platform mac "$arm64_manifest" "$x64_manifest"
-            rm "$x64_manifest"
-          done
 
       - name: Publish GitHub release
         env:
