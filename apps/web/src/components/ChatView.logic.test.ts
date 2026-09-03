@@ -36,6 +36,7 @@ import {
   resolveDraftHeroState,
   scheduleEnvironmentReconnectWarning,
   startNewThreadForProject,
+  threadHasProviderSession,
   codexArtifactTemplatePromptToAppend,
   shouldDockDraftHeroForSubmission,
   shouldReleaseTimelineAnchorForToolActivity,
@@ -58,6 +59,13 @@ describe("loadVideoPreviewUrl", () => {
     await expect(
       loadVideoPreviewUrl("data:video/mp4;base64,AA==", controller.signal),
     ).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("threadHasProviderSession", () => {
+  it("waits through the user-message-only promotion state", () => {
+    expect(threadHasProviderSession({ session: null })).toBe(false);
+    expect(threadHasProviderSession({ session: {} as Thread["session"] })).toBe(true);
   });
 });
 
