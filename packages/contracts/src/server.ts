@@ -197,6 +197,24 @@ export const ServerProvider = Schema.Struct({
 });
 export type ServerProvider = typeof ServerProvider.Type;
 
+export const PiCodexLoginStartResult = Schema.Struct({
+  loginId: TrimmedNonEmptyString,
+  userCode: TrimmedNonEmptyString,
+  verificationUri: TrimmedNonEmptyString,
+  expiresInSeconds: Schema.Number,
+});
+export type PiCodexLoginStartResult = typeof PiCodexLoginStartResult.Type;
+
+export const PiCodexLoginInput = Schema.Struct({
+  loginId: TrimmedNonEmptyString,
+});
+export type PiCodexLoginInput = typeof PiCodexLoginInput.Type;
+
+export class PiCodexLoginError extends Schema.TaggedErrorClass<PiCodexLoginError>()(
+  "PiCodexLoginError",
+  { message: TrimmedNonEmptyString },
+) {}
+
 // Provider status kinds grow over time (ServerProviderState,
 // ServerProviderAuthStatus, ServerProviderVersionAdvisoryStatus,
 // ServerProviderUpdateStatus); an older client must not fail the whole config

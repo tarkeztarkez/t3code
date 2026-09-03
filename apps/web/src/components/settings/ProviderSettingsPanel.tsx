@@ -8,6 +8,7 @@ import {
 import {
   defaultInstanceIdForDriver,
   type EnvironmentId,
+  type PiCodexLoginStartResult,
   PROVIDER_DISPLAY_NAMES,
   ProviderDriverKind,
   type ProviderInstanceConfig,
@@ -32,6 +33,7 @@ import {
   PlusIcon,
   RefreshCwIcon,
   TerminalIcon,
+  LogInIcon,
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -76,6 +78,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
+import { PiCodexLoginDialog } from "./PiCodexLoginDialog";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { providerSettingsTabClassName } from "./providerSettingsTabs";
 import { searchableSetting } from "./settingsSearch";
@@ -425,10 +428,23 @@ export function EnvironmentProviderSettings({
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
     reportFailure: false,
   });
+  const startPiCodexLogin = useAtomCommand(serverEnvironment.startPiCodexLogin, {
+    reportFailure: false,
+  });
+  const completePiCodexLogin = useAtomCommand(serverEnvironment.completePiCodexLogin, {
+    reportFailure: false,
+  });
+  const cancelPiCodexLogin = useAtomCommand(serverEnvironment.cancelPiCodexLogin, {
+    reportFailure: false,
+  });
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
   const [isAddInstanceDialogOpen, setIsAddInstanceDialogOpen] = useState(false);
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [piCodexLogin, setPiCodexLogin] = useState<PiCodexLoginStartResult | null>(null);
+  const [piCodexLoginStarting, setPiCodexLoginStarting] = useState(false);
+  const [piCodexLoginCompleting, setPiCodexLoginCompleting] = useState(false);
+  const cancelledPiCodexLoginIdRef = useRef<string | null>(null);
   const [updatingProviderDrivers, setUpdatingProviderDrivers] = useState<
     ReadonlySet<ProviderDriverKind>
   >(() => new Set());
@@ -532,6 +548,70 @@ export function EnvironmentProviderSettings({
     },
     [environmentId, updateProvider],
   );
+
+  const beginPiCodexLogin = useCallback(async () => {
+    cancelledPiCodexLoginIdRef.current = null;
+    setPiCodexLoginStarting(true);
+    const result = await startPiCodexLogin({ environmentId, input: {} });
+    setPiCodexLoginStarting(false);
+    if (result._tag === "Success") {
+      setPiCodexLogin(result.value);
+      return;
+    }
+    if (!isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: "Could not start OpenAI login",
+        description: error instanceof Error ? error.message : "OpenAI login could not be started.",
+      });
+    }
+  }, [environmentId, startPiCodexLogin]);
+
+  const finishPiCodexLogin = useCallback(async () => {
+    if (!piCodexLogin) return;
+    const loginId = piCodexLogin.loginId;
+    setPiCodexLoginCompleting(true);
+    const result = await completePiCodexLogin({
+      environmentId,
+      input: { loginId },
+    });
+    setPiCodexLoginCompleting(false);
+    if (cancelledPiCodexLoginIdRef.current === loginId) {
+      cancelledPiCodexLoginIdRef.current = null;
+      return;
+    }
+    if (result._tag === "Success") {
+      setPiCodexLogin(null);
+      refreshProviders();
+      toastManager.add({
+        type: "success",
+        title: "Pi connected to ChatGPT",
+        description: "Pi can now use your ChatGPT subscription.",
+      });
+      return;
+    }
+    if (!isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: "OpenAI login failed",
+        description: error instanceof Error ? error.message : "Pi was not connected.",
+      });
+    }
+  }, [completePiCodexLogin, environmentId, piCodexLogin, refreshProviders]);
+
+  const dismissPiCodexLogin = useCallback(() => {
+    if (piCodexLogin) {
+      cancelledPiCodexLoginIdRef.current = piCodexLogin.loginId;
+      void cancelPiCodexLogin({
+        environmentId,
+        input: { loginId: piCodexLogin.loginId },
+      });
+    }
+    setPiCodexLogin(null);
+    setPiCodexLoginCompleting(false);
+  }, [cancelPiCodexLogin, environmentId, piCodexLogin]);
 
   interface InstanceRow {
     readonly instanceId: ProviderInstanceId;
@@ -746,6 +826,11 @@ export function EnvironmentProviderSettings({
       favorite.provider === row.instanceId ? Result.succeed(favorite.model) : Result.failVoid,
     );
     const resetLabel = driverOption?.label ?? String(row.driver);
+    const piConfig =
+      row.instance.config !== null && typeof row.instance.config === "object"
+        ? (row.instance.config as Record<string, unknown>)
+        : undefined;
+    const usesBundledPi = row.driver === "pi" && (piConfig?.binaryPath ?? "pi") === "pi";
 
     return (
       <ProviderInstanceCard
@@ -810,6 +895,30 @@ export function EnvironmentProviderSettings({
             : undefined
         }
         isUpdating={mode === "editor" && showInlineUpdateButton ? isDriverUpdateRunning : undefined}
+        authAction={
+          mode === "editor" && usesBundledPi ? (
+            <div className="rounded-lg border border-border/70 p-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground">ChatGPT subscription</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Sign in to use OpenAI Codex models through Pi.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={piCodexLoginStarting}
+                  onClick={() => void beginPiCodexLogin()}
+                >
+                  {piCodexLoginStarting ? <LoaderIcon className="animate-spin" /> : <LogInIcon />}
+                  {liveProvider?.auth.status === "authenticated" ? "Reconnect" : "Connect"}
+                </Button>
+              </div>
+            </div>
+          ) : undefined
+        }
       />
     );
   };
@@ -987,6 +1096,14 @@ export function EnvironmentProviderSettings({
           environmentId={environmentId}
           environmentLabel={environmentLabel}
           onOpenChange={setIsAddInstanceDialogOpen}
+        />
+      ) : null}
+      {piCodexLogin ? (
+        <PiCodexLoginDialog
+          login={piCodexLogin}
+          completing={piCodexLoginCompleting}
+          onComplete={() => void finishPiCodexLogin()}
+          onCancel={dismissPiCodexLogin}
         />
       ) : null}
     </>

@@ -384,6 +384,7 @@ interface ProviderInstanceCardProps {
   readonly onModelOrderChange: (next: ReadonlyArray<string>) => void;
   readonly onRunUpdate?: (() => void) | undefined;
   readonly isUpdating?: boolean | undefined;
+  readonly authAction?: ReactNode | undefined;
 }
 
 /**
@@ -425,6 +426,7 @@ export function ProviderInstanceCard({
   onModelOrderChange,
   onRunUpdate,
   isUpdating = false,
+  authAction,
 }: ProviderInstanceCardProps) {
   const [activeTab, setActiveTab] = useState<"configuration" | "models">("configuration");
   const enabled = resolveProviderInstanceEnabled(instance);
@@ -855,6 +857,8 @@ export function ProviderInstanceCard({
             aria-disabled={readOnly || undefined}
             className={cn("space-y-5 px-4 py-5", readOnly && "opacity-50 select-none")}
           >
+            {authAction}
+
             <div>
               <label htmlFor={`provider-instance-${instanceId}-display-name`} className="block">
                 <span className="text-xs font-medium text-foreground">Display name</span>

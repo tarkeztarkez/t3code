@@ -791,6 +791,18 @@ export function createServerEnvironmentAtoms<R, E>(
         key: ({ environmentId }) => environmentId,
       },
     }),
+    startPiCodexLogin: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:start-pi-codex-login",
+      tag: WS_METHODS.serverStartPiCodexLogin,
+    }),
+    completePiCodexLogin: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:complete-pi-codex-login",
+      tag: WS_METHODS.serverCompletePiCodexLogin,
+    }),
+    cancelPiCodexLogin: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:cancel-pi-codex-login",
+      tag: WS_METHODS.serverCancelPiCodexLogin,
+    }),
     updateProvider: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:update-provider",
       tag: WS_METHODS.serverUpdateProvider,

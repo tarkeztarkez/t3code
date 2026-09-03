@@ -95,6 +95,7 @@ import {
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
+import { piCodexLoginCoordinator } from "./provider/piCodexLogin.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -1632,6 +1633,24 @@ const makeWsRpcLayer = (
               ? providerRegistry.refreshInstance(input.instanceId)
               : providerRegistry.refresh()
             ).pipe(Effect.map((providers) => ({ providers }))),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverStartPiCodexLogin]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.serverStartPiCodexLogin,
+            piCodexLoginCoordinator.start(config.stateDir),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverCompletePiCodexLogin]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverCompletePiCodexLogin,
+            piCodexLoginCoordinator.complete(input.loginId).pipe(Effect.as({})),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverCancelPiCodexLogin]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverCancelPiCodexLogin,
+            piCodexLoginCoordinator.cancel(input.loginId).pipe(Effect.as({})),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.providerUploadFeedback]: (input) =>

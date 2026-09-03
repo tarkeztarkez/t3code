@@ -167,6 +167,9 @@ import {
 import {
   ServerConfigStreamEvent,
   ServerConfig,
+  PiCodexLoginError,
+  PiCodexLoginInput,
+  PiCodexLoginStartResult,
   ServerProviderUpdateError,
   ServerProviderUpdateInput,
   ServerLifecycleStreamEvent,
@@ -273,6 +276,9 @@ export const WS_METHODS = {
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
+  serverStartPiCodexLogin: "server.startPiCodexLogin",
+  serverCompletePiCodexLogin: "server.completePiCodexLogin",
+  serverCancelPiCodexLogin: "server.cancelPiCodexLogin",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
   serverUpdateServerWithProgress: "server.updateServerWithProgress",
@@ -369,6 +375,24 @@ export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProv
   }),
   success: ServerProviderUpdatedPayload,
   error: EnvironmentAuthorizationError,
+});
+
+export const WsServerStartPiCodexLoginRpc = Rpc.make(WS_METHODS.serverStartPiCodexLogin, {
+  payload: Schema.Struct({}),
+  success: PiCodexLoginStartResult,
+  error: Schema.Union([PiCodexLoginError, EnvironmentAuthorizationError]),
+});
+
+export const WsServerCompletePiCodexLoginRpc = Rpc.make(WS_METHODS.serverCompletePiCodexLogin, {
+  payload: PiCodexLoginInput,
+  success: Schema.Struct({}),
+  error: Schema.Union([PiCodexLoginError, EnvironmentAuthorizationError]),
+});
+
+export const WsServerCancelPiCodexLoginRpc = Rpc.make(WS_METHODS.serverCancelPiCodexLogin, {
+  payload: PiCodexLoginInput,
+  success: Schema.Struct({}),
+  error: Schema.Union([PiCodexLoginError, EnvironmentAuthorizationError]),
 });
 
 export const WsServerUpdateProviderRpc = Rpc.make(WS_METHODS.serverUpdateProvider, {
@@ -1030,6 +1054,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
+  WsServerStartPiCodexLoginRpc,
+  WsServerCompletePiCodexLoginRpc,
+  WsServerCancelPiCodexLoginRpc,
   WsServerUpdateProviderRpc,
   WsServerUpdateServerRpc,
   WsServerUpdateServerWithProgressRpc,

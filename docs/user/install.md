@@ -78,6 +78,10 @@ Bundled Pi keeps its configuration in `~/.t3/userdata/pi`. It does not load a st
 installation's `~/.pi/agent` directory. Pi includes Codex Conversion, the MCP adapter, Claude
 instruction and skill compatibility, and subagents that appear in T3 Code's Agents panel.
 
+To use OpenAI Codex models through bundled Pi, open **Settings > Providers**, select Pi, and choose
+**Connect** under **ChatGPT subscription**. T3 Code uses OpenAI's device login and stores the
+credentials in bundled Pi's configuration directory. Pi refreshes the access token when needed.
+
 Codex and Claude are on by default. Cursor, Grok Build, and OpenCode are off by default; turn
 them on in **Settings** → the provider's card when you want to use them.
 
