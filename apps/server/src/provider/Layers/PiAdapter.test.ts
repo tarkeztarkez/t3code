@@ -687,6 +687,16 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
         [...new Set(events.map((event) => event.providerInstanceId))],
         [ProviderInstanceId.make("pi")],
       );
+      const itemEvents = events.filter((event) => event.itemId !== undefined);
+      NodeAssert.deepEqual(
+        itemEvents.map((event) => String(event.itemId)),
+        [
+          `${threadId}:pi-session-1:pi-msg-1`,
+          `${threadId}:pi-session-1:pi-msg-1`,
+          `${threadId}:pi-session-1:tool-1`,
+          `${threadId}:pi-session-1:tool-1`,
+        ],
+      );
       NodeAssert.deepEqual(runtimeMock.state.notifications, [
         { type: "extension_ui_response", id: "approval-1", value: "allow" },
       ]);

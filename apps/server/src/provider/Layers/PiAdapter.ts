@@ -147,6 +147,7 @@ type PiExtensionUiRequestEvent = Extract<PiRpcEvent, { readonly type: "extension
 
 interface PiSessionContext {
   session: ProviderSession;
+  readonly itemIdNamespace: string;
   readonly rpc: PiRpcHandle;
   readonly pendingApprovals: Map<string, PiApprovalRequestPayload>;
   readonly pendingDialogs: Map<string, PiPendingDialog>;
@@ -228,7 +229,11 @@ function encodeJsonString(value: unknown): string {
 
 function mintToolItemId(context: PiSessionContext): string {
   context.toolSequence += 1;
-  return `pi-tool-${context.messageSequence}-${context.toolSequence}`;
+  return namespacePiItemId(context, `pi-tool-${context.messageSequence}-${context.toolSequence}`);
+}
+
+function namespacePiItemId(context: PiSessionContext, itemId: string): string {
+  return `${context.itemIdNamespace}:${itemId}`;
 }
 
 // Pi may include toolCallId on some lifecycle events and omit it on others for
@@ -241,12 +246,13 @@ function fallbackToolCallItemId(
 ): string {
   const key = toolName;
   const pending = context.fallbackToolCallIds.get(key);
-  const explicit =
+  const explicitId =
     "toolCallId" in event &&
     typeof event.toolCallId === "string" &&
     event.toolCallId.trim().length > 0
       ? event.toolCallId.trim()
       : undefined;
+  const explicit = explicitId ? namespacePiItemId(context, explicitId) : undefined;
   if (event.type === "tool_execution_start") {
     const itemId = explicit ?? mintToolItemId(context);
     if (pending) {
@@ -910,7 +916,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
             ...(yield* buildEventBase({
               threadId,
               turnId,
-              itemId: `pi-msg-${context.messageSequence}`,
+              itemId: namespacePiItemId(context, `pi-msg-${context.messageSequence}`),
             })),
             type: "content.delta",
             payload: {
@@ -935,7 +941,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
               ...(yield* buildEventBase({
                 threadId,
                 turnId,
-                itemId: `pi-msg-${context.messageSequence}`,
+                itemId: namespacePiItemId(context, `pi-msg-${context.messageSequence}`),
                 raw: event,
               })),
               type: "item.completed",
@@ -1031,7 +1037,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
             ...(yield* buildEventBase({
               threadId,
               turnId,
-              itemId: `pi-compaction-${context.compactionSequence}`,
+              itemId: namespacePiItemId(context, `pi-compaction-${context.compactionSequence}`),
               raw: event,
             })),
             type: "item.started",
@@ -1049,7 +1055,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
             ...(yield* buildEventBase({
               threadId,
               turnId,
-              itemId: `pi-compaction-${context.compactionSequence}`,
+              itemId: namespacePiItemId(context, `pi-compaction-${context.compactionSequence}`),
               raw: event,
             })),
             type: "item.completed",
@@ -1285,6 +1291,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         };
         const context: PiSessionContext = {
           session,
+          itemIdNamespace: `${input.threadId}:${started.piSessionId ?? createdAt}`,
           rpc: started.rpc,
           pendingApprovals: new Map(),
           pendingDialogs: new Map(),
