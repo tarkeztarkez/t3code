@@ -16,6 +16,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import {
   BundleNotSelfContainedError,
   BuildCommandFailedError,
+  CODEX_CONVERSION_NATIVE_TOOL_UNPACK_GLOB,
   buildWslRuntimeArchiveArgs,
   parseWslRuntimeArchiveMembers,
   DesktopDmgBackgroundSourceMissingError,
@@ -608,12 +609,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         false,
       );
 
-      // All platforms keep app.asar fully packed; Windows ships the server
-      // tree as the hand-packed server.asar sidecar in extraResources instead
-      // of unpacking thousands of loose files at install time.
-      assert.notProperty(mac, "asarUnpack");
-      assert.notProperty(linux, "asarUnpack");
-      assert.notProperty(win, "asarUnpack");
+      for (const config of [mac, linux, win]) {
+        assert.deepStrictEqual(config.asarUnpack, [CODEX_CONVERSION_NATIVE_TOOL_UNPACK_GLOB]);
+      }
       assert.deepStrictEqual(win.extraResources, [
         {
           from: "apps/desktop/prod-resources/resource-monitor",
