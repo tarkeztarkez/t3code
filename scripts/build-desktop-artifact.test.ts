@@ -434,6 +434,16 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         cpu: ["x64"],
       },
     });
+    assert.deepStrictEqual(
+      createStageWorkspaceConfig({ platform: "win", arch: "x64", hoisted: true }),
+      {
+        supportedArchitectures: {
+          os: ["win32"],
+          cpu: ["x64"],
+        },
+        nodeLinker: "hoisted",
+      },
+    );
     // The server sidecar stage bundles the same-architecture WSL (Linux,
     // glibc) backend, so its install must fetch Linux native optional deps
     // (e.g. ffi-rs) too — and must be hoisted so the tree survives asar

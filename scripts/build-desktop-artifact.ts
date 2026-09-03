@@ -1247,8 +1247,17 @@ export function createStageWorkspaceConfig(input: {
   // later extracted for WSL, and neither step can rely on pnpm's
   // symlink/junction layout surviving the trip.
   readonly linuxServerBackend?: boolean;
+  readonly hoisted?: boolean;
 }): StageWorkspaceConfig {
-  const { platform, arch, allowBuilds, patchedDependencies, overrides, linuxServerBackend } = input;
+  const {
+    platform,
+    arch,
+    allowBuilds,
+    patchedDependencies,
+    overrides,
+    linuxServerBackend,
+    hoisted,
+  } = input;
   const hostOs = platform === "mac" ? "darwin" : platform === "win" ? "win32" : "linux";
   const hostCpu = arch === "universal" ? ["arm64", "x64"] : [arch];
   // Linux AppImages execute a Linux/glibc Node process that loads
@@ -1279,7 +1288,7 @@ export function createStageWorkspaceConfig(input: {
       ? { patchedDependencies }
       : {}),
     ...(overrides && Object.keys(overrides).length > 0 ? { overrides } : {}),
-    ...(linuxServerBackend ? { nodeLinker: "hoisted" as const } : {}),
+    ...(linuxServerBackend || hoisted ? { nodeLinker: "hoisted" as const } : {}),
   };
 }
 
@@ -2483,6 +2492,7 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
     allowBuilds: input.allowBuilds,
     patchedDependencies: sidecarPatchedDependencies,
     overrides: input.overrides,
+    hoisted: true,
   });
   const sidecarWorkspaceConfigString = yield* encodeStageWorkspaceConfig(sidecarWorkspaceConfig);
   yield* fs.writeFileString(
