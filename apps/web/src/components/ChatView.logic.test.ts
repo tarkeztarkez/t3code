@@ -36,7 +36,7 @@ import {
   resolveDraftHeroState,
   scheduleEnvironmentReconnectWarning,
   startNewThreadForProject,
-  threadHasProviderSession,
+  threadCanReplacePromotedDraft,
   codexArtifactTemplatePromptToAppend,
   shouldDockDraftHeroForSubmission,
   shouldReleaseTimelineAnchorForToolActivity,
@@ -62,10 +62,21 @@ describe("loadVideoPreviewUrl", () => {
   });
 });
 
-describe("threadHasProviderSession", () => {
-  it("waits through the user-message-only promotion state", () => {
-    expect(threadHasProviderSession({ session: null })).toBe(false);
-    expect(threadHasProviderSession({ session: {} as Thread["session"] })).toBe(true);
+describe("threadCanReplacePromotedDraft", () => {
+  it("waits until the provider is running or has stopped", () => {
+    expect(threadCanReplacePromotedDraft({ session: null })).toBe(false);
+    expect(
+      threadCanReplacePromotedDraft({ session: { status: "ready" } as Thread["session"] }),
+    ).toBe(false);
+    expect(
+      threadCanReplacePromotedDraft({ session: { status: "starting" } as Thread["session"] }),
+    ).toBe(false);
+    expect(
+      threadCanReplacePromotedDraft({ session: { status: "running" } as Thread["session"] }),
+    ).toBe(true);
+    expect(
+      threadCanReplacePromotedDraft({ session: { status: "error" } as Thread["session"] }),
+    ).toBe(true);
   });
 });
 

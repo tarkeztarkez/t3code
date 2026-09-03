@@ -509,10 +509,13 @@ export function threadHasStarted(thread: Thread | null | undefined): boolean {
   );
 }
 
-export function threadHasProviderSession(
+export function threadCanReplacePromotedDraft(
   thread: Pick<Thread, "session"> | null | undefined,
 ): boolean {
-  return thread?.session != null;
+  const status = thread?.session?.status;
+  return (
+    status === "running" || status === "interrupted" || status === "stopped" || status === "error"
+  );
 }
 
 // `threadProvider` is the open branded driver kind carried by the session.

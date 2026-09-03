@@ -1,6 +1,7 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import type { DraftId } from "./composerDraftStore";
+import type { ThreadSyncPhase } from "./threadSync";
 
 export type ThreadRouteTarget =
   | {
@@ -51,6 +52,14 @@ export function resolveThreadRouteSurface(input: {
     return input.serverThreadShellExists ? "chat" : "loading";
   }
   return "empty";
+}
+
+export function shouldFinalizeDraftPromotion(input: {
+  readonly draftThreadExists: boolean;
+  readonly providerStarted: boolean;
+  readonly threadSyncPhase: ThreadSyncPhase | null;
+}): boolean {
+  return input.draftThreadExists && input.providerStarted && input.threadSyncPhase === null;
 }
 
 export function buildThreadRouteParams(ref: ScopedThreadRef): {

@@ -2462,7 +2462,12 @@ function ChatViewContent(props: ChatViewProps) {
     activePendingUserInput: activePendingUserInput?.requestId ?? null,
     threadError,
   });
-  const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const isWorking =
+    phase === "running" ||
+    isSendBusy ||
+    isConnecting ||
+    isRevertingCheckpoint ||
+    draftThread?.promotedTo != null;
   const agentPetHasError = visibleThreadError !== null || activeThread?.session?.status === "error";
   const agentPetState = resolveAgentPetState({
     hasError: agentPetHasError,

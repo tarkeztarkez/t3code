@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import ChatView from "../components/ChatView";
 import {
   resolveDraftPromotionNavigationTarget,
-  threadHasProviderSession,
+  threadCanReplacePromotedDraft,
 } from "../components/ChatView.logic";
 import {
   DraftId,
@@ -31,7 +31,7 @@ function DraftChatThreadRouteView() {
     : null;
   const serverThreadRef = draftSession?.promotedTo ?? inferredThreadRef;
   const serverThread = useThread(serverThreadRef);
-  const serverThreadStarted = threadHasProviderSession(serverThread);
+  const serverThreadStarted = threadCanReplacePromotedDraft(serverThread);
   const backgroundSubmissionPending = useBackgroundDraftSubmissionPending(serverThreadRef);
   const canonicalThreadRef = resolveDraftPromotionNavigationTarget({
     serverThreadRef,

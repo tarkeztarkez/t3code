@@ -11,6 +11,7 @@ import {
   resolveThreadRouteRef,
   resolveThreadRouteSurface,
   resolveThreadRouteTarget,
+  shouldFinalizeDraftPromotion,
 } from "./threadRoutes";
 
 describe("threadRoutes", () => {
@@ -177,6 +178,23 @@ describe("threadRoutes", () => {
         serverThreadShellExists: true,
       }),
     ).toBe("chat");
+  });
+
+  it("keeps a promoted draft until the server thread is live", () => {
+    expect(
+      shouldFinalizeDraftPromotion({
+        draftThreadExists: true,
+        providerStarted: true,
+        threadSyncPhase: "syncing",
+      }),
+    ).toBe(false);
+    expect(
+      shouldFinalizeDraftPromotion({
+        draftThreadExists: true,
+        providerStarted: true,
+        threadSyncPhase: null,
+      }),
+    ).toBe(true);
   });
 
   it("keeps missing threads empty while the redirect effect runs", () => {

@@ -2,12 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import ChatView from "../components/ChatView";
-import { threadHasProviderSession } from "../components/ChatView.logic";
+import { threadCanReplacePromotedDraft } from "../components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
 import {
   resolveThreadRouteRef,
   resolveThreadRouteRenderState,
   resolveThreadRouteSurface,
+  shouldFinalizeDraftPromotion,
 } from "../threadRoutes";
 import { resolveThreadSyncPhase } from "../threadSync";
 import { SidebarInset } from "~/components/ui/sidebar";
@@ -74,7 +75,7 @@ function ChatThreadRouteView() {
     shellExists: serverThreadShell !== null,
     status: serverThreadStatus,
   });
-  const serverThreadStarted = threadHasProviderSession(serverThreadDetail);
+  const serverThreadStarted = threadCanReplacePromotedDraft(serverThreadDetail);
   const environmentHasAnyThreads = environmentHasServerThreads || environmentHasDraftThreads;
   const routeSurface = resolveThreadRouteSurface({
     renderState,
@@ -92,11 +93,18 @@ function ChatThreadRouteView() {
   }, [bootstrapComplete, environmentHasAnyThreads, navigate, renderState, threadRef]);
 
   useEffect(() => {
-    if (!threadRef || !serverThreadStarted || !draftThread) {
+    if (
+      !threadRef ||
+      !shouldFinalizeDraftPromotion({
+        draftThreadExists: draftThread !== null,
+        providerStarted: serverThreadStarted,
+        threadSyncPhase,
+      })
+    ) {
       return;
     }
     finalizePromotedDraftThreadByRef(threadRef);
-  }, [draftThread, serverThreadStarted, threadRef]);
+  }, [draftThread, serverThreadStarted, threadRef, threadSyncPhase]);
 
   if (!threadRef) {
     return null;
