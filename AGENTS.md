@@ -8,7 +8,7 @@ T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provid
 - Never push changes to upstream. Push only to the fork.
 - Before making any changes, run `git pull --ff-only`.
 - After committing changes, always run `git push` to the fork.
-- After pushing, try to build the desktop artifact for the host platform and upgrade the T3 Code installation on that machine. Skip this when the required tooling or a safe install path is unavailable, and report why. This gives us the change without waiting for GitHub Actions.
+- After pushing, try to build the desktop artifact for the host platform and replace the current T3 Code installation on that machine. Reuse its install path and desktop entry. Never create side-by-side AppImages or duplicate launchers. Skip this when the required tooling or a safe install path is unavailable, and report why. This gives us the change without waiting for GitHub Actions.
 - Do not apply local T3 or Pi state workarounds unless the developer explicitly asks. Fix the repository, commit, and push instead.
 - Fork desktop releases run only from version tags or manual dispatch. Do not restore release builds on every `main` push.
 
