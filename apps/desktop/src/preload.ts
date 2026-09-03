@@ -11,13 +11,8 @@ import * as IpcChannels from "./ipc/channels.ts";
 
 exposeClerkBridge({ passkeys: true });
 
-// oxlint-disable-next-line t3code/no-global-process-runtime -- Electron exposes runtime details in its sandboxed preload process.
-const runtimeProcess = process;
-const clientPlatform = runtimeProcess.platform;
-const supportsNativeAgentPetOverlay =
-  clientPlatform !== "linux" || runtimeProcess.env.XDG_SESSION_TYPE !== "wayland";
-const updateAgentPet: NonNullable<DesktopBridge["updateAgentPet"]> = (input) =>
-  ipcRenderer.invoke(IpcChannels.UPDATE_AGENT_PET_CHANNEL, input);
+// oxlint-disable-next-line t3code/no-global-process-runtime -- Electron exposes the client platform in its sandboxed preload process.
+const clientPlatform = process.platform;
 
 function unwrapEnsureSshEnvironmentResult(result: unknown) {
   if (
@@ -156,7 +151,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.removeListener(IpcChannels.WINDOW_FULLSCREEN_STATE_CHANNEL, wrappedListener);
     };
   },
-  ...(supportsNativeAgentPetOverlay ? { updateAgentPet } : {}),
+  updateAgentPet: (input) => ipcRenderer.invoke(IpcChannels.UPDATE_AGENT_PET_CHANNEL, input),
   getUpdateState: () => ipcRenderer.invoke(IpcChannels.UPDATE_GET_STATE_CHANNEL),
   setUpdateChannel: (channel) =>
     ipcRenderer.invoke(IpcChannels.UPDATE_SET_CHANNEL_CHANNEL, channel),

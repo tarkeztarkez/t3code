@@ -7,7 +7,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { buildAgentPetOverlayDataUrl } from "./AgentPetOverlay.ts";
+import { AGENT_PET_WINDOW_TITLE, buildAgentPetOverlayDataUrl } from "./AgentPetOverlay.ts";
 
 describe("buildAgentPetOverlayDataUrl", () => {
   it("builds a draggable transparent pet document with the selected animation", () => {
@@ -22,6 +22,7 @@ describe("buildAgentPetOverlayDataUrl", () => {
     const html = decodeURIComponent(url.slice("data:text/html;charset=utf-8,".length));
 
     expect(html).toContain("-webkit-app-region:drag");
+    expect(html).toContain(`<title>${AGENT_PET_WINDOW_TITLE}</title>`);
     expect(html).toContain('background-image:url("t3code://app/pets/pet.webp")');
     expect(html).toContain('data-frames="6"');
     expect(html).toContain("--pet-row:7;--pet-duration:820ms");

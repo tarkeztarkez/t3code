@@ -4,6 +4,7 @@ const PET_WINDOW_WIDTH = 272;
 const PET_WINDOW_HEIGHT = 164;
 const PET_FRAME_WIDTH = 96;
 const PET_FRAME_HEIGHT = 104;
+export const AGENT_PET_WINDOW_TITLE = "T3 Agent Pet";
 
 export interface AgentPetOverlayUpdate {
   readonly visible: boolean;
@@ -46,6 +47,7 @@ export function buildAgentPetOverlayDataUrl(
 <html>
   <head>
     <meta charset="utf-8">
+    <title>${AGENT_PET_WINDOW_TITLE}</title>
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src t3code: t3code-dev:; style-src 'unsafe-inline'">
     <style>
       html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
@@ -105,6 +107,7 @@ async function createOverlay(
     resizable: false,
     show: false,
     skipTaskbar: true,
+    title: AGENT_PET_WINDOW_TITLE,
     transparent: true,
     webPreferences: {
       backgroundThrottling: false,
@@ -115,6 +118,7 @@ async function createOverlay(
   });
   overlayWindow = window;
   bindOwner(owner);
+  window.on("page-title-updated", (event) => event.preventDefault());
   window.setAlwaysOnTop(true, "screen-saver", 1);
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   window.on("move", () => {
