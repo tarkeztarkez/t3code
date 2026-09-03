@@ -7,15 +7,15 @@ Its state and named profiles live under T3 home:
 ~/.t3/userdata/pi/pi-subagents/
 ```
 
-Named profiles use `agents.json`:
+The extension includes `sol-low` and `sol-medium`. Add profiles or override those defaults with `agents.json`:
 
 ```json
 {
   "agents": [
     {
-      "name": "sol-low",
-      "model": "openai-codex/gpt-5.6-sol",
-      "reasoning_effort": "low"
+      "name": "my-agent",
+      "model": "openrouter/moonshotai/kimi-k3",
+      "reasoning_effort": "medium"
     }
   ]
 }
