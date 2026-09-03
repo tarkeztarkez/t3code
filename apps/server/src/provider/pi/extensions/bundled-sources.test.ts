@@ -37,6 +37,13 @@ it.effect("merges configured Pi subagents with the bundled profiles", () =>
       [
         "sol-low|openrouter/custom/override|high",
         "sol-medium|openai-codex/gpt-5.6-sol|medium",
+        "sol-high|openai-codex/gpt-5.6-sol|high",
+        "terra-low|openai-codex/gpt-5.6-terra|low",
+        "terra-medium|openai-codex/gpt-5.6-terra|medium",
+        "terra-high|openai-codex/gpt-5.6-terra|high",
+        "luna-low|openai-codex/gpt-5.6-luna|low",
+        "luna-medium|openai-codex/gpt-5.6-luna|medium",
+        "luna-high|openai-codex/gpt-5.6-luna|high",
         "extra|openrouter/custom/extra|medium",
         "",
       ].join("\n"),

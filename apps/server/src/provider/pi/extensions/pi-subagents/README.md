@@ -7,7 +7,7 @@ Its state and named profiles live under T3 home:
 ~/.t3/userdata/pi/pi-subagents/
 ```
 
-The extension includes `sol-low` and `sol-medium`. Add profiles or override those defaults with `agents.json`:
+The extension includes low, medium, and high reasoning profiles for the `sol`, `terra`, and `luna` OpenAI models. Add profiles or override those defaults with `agents.json`:
 
 ```json
 {
