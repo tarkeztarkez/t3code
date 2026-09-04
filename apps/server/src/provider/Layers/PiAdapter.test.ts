@@ -84,6 +84,7 @@ const runtimeMock = {
         { role: "toolResult", content: [{ type: "text", text: "Tool output" }] },
       ],
     } as unknown,
+    commandsData: { commands: [] } as unknown,
   },
   reset() {
     this.state.spawnInputs.length = 0;
@@ -112,6 +113,7 @@ const runtimeMock = {
         { role: "toolResult", content: [{ type: "text", text: "Tool output" }] },
       ],
     };
+    this.state.commandsData = { commands: [] };
   },
 };
 
@@ -176,6 +178,14 @@ const PiRuntimeTestDouble: PiRuntimeShape = {
                 command: type,
                 success: true,
                 data: runtimeMock.state.messagesData,
+              };
+            }
+            if (type === "get_commands") {
+              return {
+                type: "response",
+                command: type,
+                success: true,
+                data: runtimeMock.state.commandsData,
               };
             }
             return { type: "response", command: type, success: true };
@@ -246,6 +256,45 @@ it("builds and normalizes concise notebook summaries", () => {
 });
 
 it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
+  it.effect("discovers project skills and passes them to the next session", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const skillDirectory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pi-skill-" });
+      const skillPath = path.join(skillDirectory, "SKILL.md");
+      yield* fs.writeFileString(skillPath, "# Local review\n\nCheck the current change.");
+      runtimeMock.state.commandsData = {
+        commands: [
+          {
+            name: "skill:local-review",
+            source: "skill",
+            location: "project",
+            path: skillPath,
+          },
+        ],
+      };
+
+      const threadId = asThreadId("thread-pi-project-skill");
+      const skills = yield* adapter.listSkills!(process.cwd());
+      yield* startPiSession(adapter, threadId);
+      yield* adapter.sendTurn({ threadId, input: "$local-review inspect this" });
+
+      NodeAssert.deepEqual(
+        skills.map((skill) => skill.name),
+        ["local-review"],
+      );
+      NodeAssert.equal(runtimeMock.state.spawnInputs[0]?.noExtensions, undefined);
+      NodeAssert.deepEqual(runtimeMock.state.spawnInputs[1]?.skillPaths, [skillPath]);
+      const prompt = runtimeMock.state.requests.findLast(
+        (request) => commandType(request) === "prompt",
+      );
+      NodeAssert.match(String(prompt?.message), /<skill name="local-review"/u);
+      NodeAssert.match(String(prompt?.message), /Check the current change/u);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("starts and stops a Pi RPC session through the runtime service", () =>
     Effect.gen(function* () {
       const adapter = yield* PiAdapter;

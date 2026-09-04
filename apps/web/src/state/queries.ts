@@ -12,9 +12,11 @@ import { type VcsRefTarget } from "@t3tools/client-runtime/state/vcs";
 import type {
   EnvironmentId,
   OrchestrationThread,
+  ProviderInstanceId,
   ProjectContentMatch,
   ProjectEntryKind,
   ThreadId,
+  ServerProviderSkill,
   VcsListRefsResult,
   VcsRef,
 } from "@t3tools/contracts";
@@ -39,6 +41,7 @@ const THREAD_SEARCH_DEBOUNCE_MS = 200;
 const VCS_REF_LIST_LIMIT = 100;
 const EMPTY_REFS: ReadonlyArray<VcsRef> = [];
 const EMPTY_CONTENT_MATCHES: ReadonlyArray<ProjectContentMatch> = [];
+const EMPTY_PROVIDER_SKILLS: ReadonlyArray<ServerProviderSkill> = [];
 const INITIAL_BRANCH_CURSORS = [undefined] as const;
 const EMPTY_THREAD_SEARCH_MATCHES: ReadonlyArray<EnvironmentThreadSearchMatch> = Object.freeze([]);
 const EMPTY_THREAD_SEARCH_ATOM = Atom.make({
@@ -300,6 +303,29 @@ export function useProjectPathSearch(
 
 export function useComposerPathSearch(target: ComposerPathSearchTarget) {
   return useProjectPathSearch(target, COMPOSER_PATH_SEARCH_LIMIT);
+}
+
+export function useProviderSkills(target: {
+  readonly environmentId: EnvironmentId | null;
+  readonly providerInstanceId: ProviderInstanceId | null;
+  readonly cwd: string | null;
+  readonly enabled: boolean;
+}): {
+  readonly skills: ReadonlyArray<ServerProviderSkill>;
+  readonly isPending: boolean;
+} {
+  const result = useEnvironmentQuery(
+    target.enabled &&
+      target.environmentId !== null &&
+      target.providerInstanceId !== null &&
+      target.cwd !== null
+      ? projectEnvironment.listProviderSkills({
+          environmentId: target.environmentId,
+          input: { providerInstanceId: target.providerInstanceId, cwd: target.cwd },
+        })
+      : null,
+  );
+  return { skills: result.data?.skills ?? EMPTY_PROVIDER_SKILLS, isPending: result.isPending };
 }
 
 interface ProjectContentSearchTarget {

@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("../../state/use-composer-path-search", () => ({
   useComposerPathSearch: () => ({ entries: [], isPending: false }),
 }));
+vi.mock("../../state/queries", () => ({
+  useProviderSkills: () => ({ skills: [], isPending: false }),
+}));
 
 import { composerSelectionAtEnd } from "./use-composer-command-menu";
 

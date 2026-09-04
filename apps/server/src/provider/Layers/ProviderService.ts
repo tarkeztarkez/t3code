@@ -14,6 +14,7 @@ import {
   NonNegativeInt,
   ThreadId,
   ProviderInterruptTurnInput,
+  ProviderListSkillsInput,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderSendTurnInput,
@@ -1075,6 +1076,18 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const getInstanceInfo: ProviderServiceMethod<"getInstanceInfo"> = (instanceId) =>
     registry.getInstanceInfo(instanceId);
 
+  const listSkills: NonNullable<ProviderServiceMethod<"listSkills">> = Effect.fn("listSkills")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.listSkills",
+        schema: ProviderListSkillsInput,
+        payload: rawInput,
+      });
+      const adapter = yield* registry.getByInstance(input.providerInstanceId);
+      return { skills: adapter.listSkills ? yield* adapter.listSkills(input.cwd) : [] };
+    },
+  );
+
   const rollbackConversation: ProviderServiceMethod<"rollbackConversation"> = Effect.fn(
     "rollbackConversation",
   )(function* (rawInput) {
@@ -1227,6 +1240,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     listSessions,
     getCapabilities,
     getInstanceInfo,
+    listSkills,
     rollbackConversation,
     uploadFeedback,
     // Each access creates a fresh PubSub subscription so that multiple

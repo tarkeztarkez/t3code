@@ -16,6 +16,7 @@ import type {
   ProviderSendTurnInput,
   ProviderSession,
   ProviderSessionStartInput,
+  ServerProviderSkill,
   ProviderUploadFeedbackInput,
   ProviderUploadFeedbackResult,
   ThreadId,
@@ -97,6 +98,9 @@ export interface ProviderAdapterShape<TError> {
    * List currently active provider sessions for this adapter.
    */
   readonly listSessions: () => Effect.Effect<ReadonlyArray<ProviderSession>>;
+
+  /** Discover the skills available to this provider in one project directory. */
+  readonly listSkills?: (cwd: string) => Effect.Effect<ReadonlyArray<ServerProviderSkill>, TError>;
 
   /**
    * Check whether this adapter owns an active session id.

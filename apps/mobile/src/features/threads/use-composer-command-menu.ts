@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ComposerEditorSelection } from "../../components/ComposerEditor";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
+import { useProviderSkills } from "../../state/queries";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
 
@@ -75,6 +76,19 @@ export function useComposerCommandMenu({
     cwd: trigger?.kind === "path" ? projectCwd : null,
     query: trigger?.kind === "path" ? trigger.query : null,
   });
+  const piSkillInventory = useProviderSkills({
+    environmentId,
+    providerInstanceId:
+      selectedProviderStatus?.driver === "pi" ? selectedProviderStatus.instanceId : null,
+    cwd: projectCwd,
+    enabled:
+      selectedProviderStatus?.driver === "pi" &&
+      (trigger?.kind === "skill" || trigger?.kind === "slash-command"),
+  });
+  const providerSkills =
+    selectedProviderStatus?.driver === "pi"
+      ? piSkillInventory.skills
+      : (selectedProviderStatus?.skills ?? []);
 
   const items = useMemo<ComposerCommandItem[]>(() => {
     if (!trigger) return [];
@@ -130,7 +144,7 @@ export function useComposerCommandMenu({
         });
       }
 
-      const skillItems = (selectedProviderStatus?.skills ?? [])
+      const skillItems = providerSkills
         .filter((skill) => matchesSlashSkillQuery(skill, q))
         .map((skill) => ({
           id: `skill:${skill.name}`,
@@ -144,7 +158,7 @@ export function useComposerCommandMenu({
     }
 
     if (trigger.kind === "skill") {
-      const enabledSkills = (selectedProviderStatus?.skills ?? []).filter((skill) => skill.enabled);
+      const enabledSkills = providerSkills.filter((skill) => skill.enabled);
       const normalizedQuery = normalizeSearchQuery(trigger.query, {
         trimLeadingPattern: /^\$+/,
       });
@@ -241,7 +255,14 @@ export function useComposerCommandMenu({
     }
 
     return [];
-  }, [hasThread, onUpdateInteractionMode, pathSearch.entries, selectedProviderStatus, trigger]);
+  }, [
+    hasThread,
+    onUpdateInteractionMode,
+    pathSearch.entries,
+    providerSkills,
+    selectedProviderStatus,
+    trigger,
+  ]);
 
   const onSelect = useCallback(
     (item: ComposerCommandItem) => {
@@ -286,7 +307,7 @@ export function useComposerCommandMenu({
     onSelectionChange,
     trigger,
     items,
-    isLoading: pathSearch.isPending,
+    isLoading: pathSearch.isPending || (trigger?.kind === "skill" && piSkillInventory.isPending),
     onSelect,
   };
 }

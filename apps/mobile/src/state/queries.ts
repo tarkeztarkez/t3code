@@ -2,6 +2,8 @@ import type { VcsRefTarget } from "@t3tools/client-runtime/state/vcs";
 import type {
   EnvironmentId,
   OrchestrationThread,
+  ProviderInstanceId,
+  ServerProviderSkill,
   ThreadId,
   VcsListRefsResult,
   VcsRef,
@@ -33,6 +35,7 @@ const COMPOSER_PATH_SEARCH_DEBOUNCE_MS = 200;
 const COMPOSER_PATH_SEARCH_LIMIT = 20;
 const THREAD_SEARCH_DEBOUNCE_MS = 200;
 const VCS_REF_LIST_LIMIT = 100;
+const EMPTY_PROVIDER_SKILLS: ReadonlyArray<ServerProviderSkill> = [];
 const EMPTY_REFS: ReadonlyArray<VcsRef> = [];
 const INITIAL_BRANCH_CURSORS = [undefined] as const;
 const EMPTY_THREAD_SEARCH_MATCHES: ReadonlyArray<EnvironmentThreadSearchMatch> = Object.freeze([]);
@@ -274,6 +277,29 @@ export function useComposerPathSearch(target: ComposerPathSearchTarget) {
     isPending: normalizedTarget.query !== debouncedTarget.query || result.isPending,
     refresh: result.refresh,
   };
+}
+
+export function useProviderSkills(target: {
+  readonly environmentId: EnvironmentId | null;
+  readonly providerInstanceId: ProviderInstanceId | null;
+  readonly cwd: string | null;
+  readonly enabled: boolean;
+}): {
+  readonly skills: ReadonlyArray<ServerProviderSkill>;
+  readonly isPending: boolean;
+} {
+  const result = useEnvironmentQuery(
+    target.enabled &&
+      target.environmentId !== null &&
+      target.providerInstanceId !== null &&
+      target.cwd !== null
+      ? projectEnvironment.listProviderSkills({
+          environmentId: target.environmentId,
+          input: { providerInstanceId: target.providerInstanceId, cwd: target.cwd },
+        })
+      : null,
+  );
+  return { skills: result.data?.skills ?? EMPTY_PROVIDER_SKILLS, isPending: result.isPending };
 }
 
 export function useCheckpointDiff(target: CheckpointDiffTarget) {

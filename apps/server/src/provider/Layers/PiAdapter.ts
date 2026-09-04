@@ -5,6 +5,7 @@ import {
   ProviderInstanceId,
   type ProviderRuntimeEvent,
   type ProviderSession,
+  type ServerProviderSkill,
   RuntimeItemId,
   RuntimeRequestId,
   RuntimeTaskId,
@@ -16,6 +17,7 @@ import {
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { toToolLifecycleItemType } from "@t3tools/shared/toolLifecycle";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -63,11 +65,13 @@ import {
   toPiApprovalSelection,
 } from "../piRuntime.ts";
 import { PI_CODEX_CONVERSION_DEFAULT_CONFIG } from "../pi/default-config.ts";
+import { discoverPiSkills, findReferencedPiSkills } from "../Drivers/PiSkills.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = ProviderDriverKind.make("pi");
 const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 const PI_MCP_BRIDGE_TOKEN_ENV = "T3_MCP_BEARER_TOKEN";
+const PI_SKILL_INVENTORY_CACHE_MS = 4_000;
 const PI_RESUME_CURSOR_VERSION = 1 as const;
 const PI_SUBAGENTS_FLEET_PREFIX = "T3_SUBAGENTS ";
 const PI_NOTEBOOK_SUMMARY_MODEL = "gpt-5.6-luna";
@@ -471,6 +475,14 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
     const bundledExtensionPaths = PI_BUNDLED_EXTENSIONS.map((extension) =>
       path.join(extensionDir, extension.fileName),
     );
+    const inventoryExtensionPaths = [
+      path.join(extensionDir, "claude-compat.ts"),
+      ...(options?.extensionPaths ?? []),
+    ];
+    const skillInventoryCache = new Map<
+      string,
+      { readonly checkedAt: number; readonly skills: ReadonlyArray<ServerProviderSkill> }
+    >();
     const piAgentDir = path.join(serverConfig.stateDir, "pi");
     const userExtensionsPath = path.join(piAgentDir, "extensions");
     const codexConfigPath = path.join(piAgentDir, "pi-codex-conversion.json");
@@ -1225,9 +1237,37 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         }),
       ).pipe(Effect.map((images) => images.filter((image) => image !== null)));
 
+    const listSkills: NonNullable<PiAdapterShape["listSkills"]> = Effect.fn("listPiSkills")(
+      function* (cwd) {
+        const cached = skillInventoryCache.get(cwd);
+        const checkedAt = yield* Clock.currentTimeMillis;
+        if (cached && checkedAt - cached.checkedAt < PI_SKILL_INVENTORY_CACHE_MS) {
+          return cached.skills;
+        }
+        const skills = yield* discoverPiSkills({
+          command: options?.command ?? { binaryPath: piSettings.binaryPath },
+          cwd,
+          ...(options?.environment ? { environment: options.environment } : {}),
+          extensionPaths: inventoryExtensionPaths,
+        }).pipe(
+          Effect.provideService(PiRuntime, piRuntime),
+          Effect.catch((cause) => {
+            const detail = piRuntimeErrorDetail(cause);
+            return Effect.logWarning("Unable to refresh Pi skills; using the last inventory.", {
+              cwd,
+              detail,
+            }).pipe(Effect.as(cached?.skills ?? []));
+          }),
+        );
+        skillInventoryCache.set(cwd, { checkedAt: yield* Clock.currentTimeMillis, skills });
+        return skills;
+      },
+    );
+
     const startSession: PiAdapterShape["startSession"] = Effect.fn("startSession")(
       function* (input) {
         const directory = input.cwd ?? serverConfig.cwd;
+        const skills = skillInventoryCache.get(directory)?.skills ?? [];
         const resumeSessionId = parsePiResumeCursor(input.resumeCursor)?.sessionId;
         const existing = sessions.get(input.threadId);
         if (existing) {
@@ -1275,6 +1315,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
             ...(spawnEnvironment ? { environment: spawnEnvironment } : {}),
             runtimeMode: input.runtimeMode,
             noExtensions: true,
+            skillPaths: skills.map((skill) => skill.path),
             ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
             sessionName: `T3 Code ${input.threadId}`,
             ...(input.modelSelection ? { modelSlug: input.modelSelection.model } : {}),
@@ -1455,6 +1496,32 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
       },
     );
 
+    const expandSkillMentions = Effect.fn("expandPiSkillMentions")(function* (
+      text: string,
+      cwd: string,
+    ) {
+      if (!text.includes("$")) return text;
+      const skills = yield* listSkills(cwd);
+      const referenced = findReferencedPiSkills(text, skills);
+      if (referenced.length === 0) return text;
+      const loaded = yield* Effect.forEach(referenced, (skill) =>
+        fs.readFileString(skill.path).pipe(
+          Effect.exit,
+          Effect.map((result) =>
+            Exit.isSuccess(result) ? { skill, content: result.value } : null,
+          ),
+        ),
+      );
+      const sections = loaded.flatMap((entry) =>
+        entry
+          ? [
+              `<skill name=${JSON.stringify(entry.skill.name)} path=${JSON.stringify(entry.skill.path)}>\n${entry.content}\n</skill>`,
+            ]
+          : [],
+      );
+      return sections.length > 0 ? `${sections.join("\n\n")}\n\n${text}` : text;
+    });
+
     const sendTurn: PiAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
       const context = ensureSessionContext(sessions, input.threadId);
       const modelSelection =
@@ -1482,6 +1549,9 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           issue: "Pi turns require text input or at least one image attachment.",
         });
       }
+      const promptText = text
+        ? yield* expandSkillMentions(text, context.session.cwd ?? serverConfig.cwd)
+        : "";
 
       const steeringTurnId = context.activeTurnId;
       const turnId = steeringTurnId ?? TurnId.make(`pi-turn-${yield* randomUUIDv4}`);
@@ -1538,7 +1608,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
       yield* context.rpc
         .request({
           type: "prompt",
-          message: text ?? "",
+          message: promptText,
           ...(images.length > 0 ? { images } : {}),
           ...(steeringTurnId !== undefined ? { streamingBehavior: "steer" } : {}),
         })
@@ -1742,6 +1812,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
       respondToUserInput,
       stopSession,
       listSessions,
+      listSkills,
       hasSession,
       readThread,
       rollbackThread,

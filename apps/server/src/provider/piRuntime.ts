@@ -326,6 +326,20 @@ export interface PiAvailableModelsResponseData {
   readonly models: ReadonlyArray<PiAvailableModel>;
 }
 
+const PiCommandInfo = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  source: Schema.String,
+  location: Schema.optionalKey(Schema.String),
+  path: Schema.optionalKey(Schema.String),
+});
+export type PiCommandInfo = typeof PiCommandInfo.Type;
+
+const PiCommandsResponseData = Schema.Struct({
+  commands: Schema.Array(PiCommandInfo),
+});
+export type PiCommandsResponseData = typeof PiCommandsResponseData.Type;
+
 export const PiMessagesResponseData = Schema.Struct({
   messages: Schema.Array(PiThreadMessage),
 });
@@ -405,6 +419,7 @@ export type PiRpcEvent = typeof PiRpcEvent.Type;
 export const decodePiSessionStatsExit = Schema.decodeUnknownExit(PiSessionStats);
 export const decodePiStateResponseDataExit = Schema.decodeUnknownExit(PiStateResponseData);
 export const decodePiMessagesResponseDataExit = Schema.decodeUnknownExit(PiMessagesResponseData);
+export const decodePiCommandsResponseDataExit = Schema.decodeUnknownExit(PiCommandsResponseData);
 
 const decodePiAvailableModelExit = Schema.decodeUnknownExit(PiAvailableModel);
 const decodePiAvailableModelsResponseDataShapeExit = Schema.decodeUnknownExit(
@@ -447,6 +462,7 @@ export interface SpawnPiRpcInput {
   readonly modelSlug?: string;
   readonly thinkingLevel?: string;
   readonly extensionPaths?: ReadonlyArray<string>;
+  readonly skillPaths?: ReadonlyArray<string>;
   readonly noExtensions?: boolean;
   readonly noSession?: boolean;
   readonly noTools?: boolean;
@@ -480,6 +496,7 @@ export const spawnPiRpcSession = (
       ...(parsedModel ? ["--provider", parsedModel.provider, "--model", parsedModel.modelId] : []),
       ...(input.thinkingLevel ? ["--thinking", input.thinkingLevel] : []),
       ...(input.extensionPaths ?? []).flatMap((extensionPath) => ["--extension", extensionPath]),
+      ...(input.skillPaths ?? []).flatMap((skillPath) => ["--skill", skillPath]),
     ];
     const environment = {
       ...input.environment,

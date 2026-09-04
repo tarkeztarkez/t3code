@@ -170,6 +170,8 @@ import {
   PiCodexLoginError,
   PiCodexLoginInput,
   PiCodexLoginStartResult,
+  ProviderListSkillsInput,
+  ProviderListSkillsResult,
   ServerProviderUpdateError,
   ServerProviderUpdateInput,
   ServerLifecycleStreamEvent,
@@ -231,6 +233,7 @@ export const WS_METHODS = {
 
   // Provider methods
   providerUploadFeedback: "provider.uploadFeedback",
+  providerListSkills: "provider.listSkills",
 
   // VCS methods
   vcsPull: "vcs.pull",
@@ -724,6 +727,12 @@ export const WsProviderUploadFeedbackRpc = Rpc.make(WS_METHODS.providerUploadFee
   error: Schema.Union([ProviderUploadFeedbackError, EnvironmentAuthorizationError]),
 });
 
+export const WsProviderListSkillsRpc = Rpc.make(WS_METHODS.providerListSkills, {
+  payload: ProviderListSkillsInput,
+  success: ProviderListSkillsResult,
+  error: EnvironmentAuthorizationError,
+});
+
 export const WsSubscribeVcsStatusRpc = Rpc.make(WS_METHODS.subscribeVcsStatus, {
   payload: VcsStatusInput,
   success: VcsStatusStreamEvent,
@@ -1108,6 +1117,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsAttachmentsCreateUploadUrlRpc,
   WsAttachmentsDeleteRpc,
   WsProviderUploadFeedbackRpc,
+  WsProviderListSkillsRpc,
   WsSubscribeVcsStatusRpc,
   WsVcsPullRpc,
   WsVcsRefreshStatusRpc,

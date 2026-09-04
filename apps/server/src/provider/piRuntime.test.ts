@@ -141,6 +141,23 @@ describe("decodePiAvailableModelsResponseDataExit", () => {
 });
 
 describe("spawnPiRpcSession", () => {
+  it.effect("passes explicit skill paths to Pi", () =>
+    spawnWithFakeProcess(({ spawnedArgs }) =>
+      Effect.gen(function* () {
+        yield* spawnPiRpcSession({
+          binaryPath: "pi",
+          cwd: process.cwd(),
+          runtimeMode: "full-access",
+          skillPaths: ["/tmp/one/SKILL.md", "/tmp/two/SKILL.md"],
+        });
+
+        expect(spawnedArgs[0]).toContain("--skill");
+        expect(spawnedArgs[0]).toContain("/tmp/one/SKILL.md");
+        expect(spawnedArgs[0]).toContain("/tmp/two/SKILL.md");
+      }),
+    ),
+  );
+
   it.effect("passes an exact session id to Pi", () =>
     spawnWithFakeProcess(({ spawnedArgs }) =>
       Effect.gen(function* () {

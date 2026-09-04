@@ -14,6 +14,8 @@
 import type {
   ProviderInterruptTurnInput,
   ProviderInstanceId,
+  ProviderListSkillsInput,
+  ProviderListSkillsResult,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderRuntimeEvent,
@@ -98,6 +100,10 @@ export interface ProviderServiceShape {
   readonly getInstanceInfo: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderServiceError>;
+
+  readonly listSkills?: (
+    input: ProviderListSkillsInput,
+  ) => Effect.Effect<ProviderListSkillsResult, ProviderServiceError>;
 
   /**
    * Roll back provider conversation state by a number of turns.
