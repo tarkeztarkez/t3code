@@ -1210,7 +1210,6 @@ describe("deriveWorkLogEntries", () => {
         summary: "exec started",
         payload: {
           itemType: "dynamic_tool_call",
-          title: "exec",
           toolCallId: "notebook-1",
           status: "inProgress",
           data: { tool: "exec", args: { code: "await tools.exec_command({ cmd: 'rg TODO' })" } },
@@ -1230,7 +1229,6 @@ describe("deriveWorkLogEntries", () => {
         summary: "exec",
         payload: {
           itemType: "dynamic_tool_call",
-          title: "exec",
           toolCallId: "notebook-1",
           status: "completed",
           detail: "No matches",

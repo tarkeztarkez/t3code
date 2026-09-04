@@ -1057,7 +1057,7 @@ function extractToolCommand(payload: Record<string, unknown> | null): {
 }
 
 function extractToolTitle(payload: Record<string, unknown> | null): string | null {
-  return asTrimmedString(payload?.title);
+  return asTrimmedString(payload?.title) ?? asTrimmedString(asRecord(payload?.data)?.tool);
 }
 
 function extractWorkLogToolLifecycleStatus(

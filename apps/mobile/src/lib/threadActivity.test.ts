@@ -1068,7 +1068,6 @@ describe("buildThreadFeed", () => {
           turnId,
           payload: {
             itemType: "dynamic_tool_call",
-            title: "exec",
             toolCallId: "notebook-1",
             status: "inProgress",
             data: { tool: "exec", args: { code: "await tools.exec_command({ cmd: 'pwd' })" } },
@@ -1083,7 +1082,6 @@ describe("buildThreadFeed", () => {
           turnId,
           payload: {
             itemType: "dynamic_tool_call",
-            title: "exec",
             toolCallId: "notebook-1",
             status: "completed",
           },
