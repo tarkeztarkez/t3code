@@ -1585,10 +1585,6 @@ function ChatViewContent(props: ChatViewProps) {
     [mountedTerminalThreadKeys],
   );
 
-  const fallbackDraftProjectRef = draftThread
-    ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
-    : null;
-  const fallbackDraftProject = useProject(fallbackDraftProjectRef);
   const localDraftError = activeServerThread
     ? null
     : ((draftId ? localDraftErrorsByDraftId[draftId]?.message : null) ?? null);
@@ -1631,13 +1627,9 @@ function ChatViewContent(props: ChatViewProps) {
   const localDraftThread = useMemo(
     () =>
       draftThread
-        ? buildLocalDraftThread(
-            threadId,
-            draftThread,
-            fallbackDraftProject?.defaultModelSelection ?? NO_PROVIDER_MODEL_SELECTION,
-          )
+        ? buildLocalDraftThread(threadId, draftThread, NO_PROVIDER_MODEL_SELECTION)
         : undefined,
-    [draftThread, fallbackDraftProject?.defaultModelSelection, threadId],
+    [draftThread, threadId],
   );
   // Promotion is data-driven: the draft route keeps rendering while the
   // server thread (same pre-allocated ref) starts, so live state must not
@@ -2138,10 +2130,7 @@ function ChatViewContent(props: ChatViewProps) {
   );
 
   const selectedProviderByThreadId = composerActiveProvider ?? null;
-  const threadProvider =
-    activeThread?.modelSelection.instanceId ??
-    activeProject?.defaultModelSelection?.instanceId ??
-    null;
+  const threadProvider = activeThread?.modelSelection.instanceId ?? null;
   const lockedProvider = deriveLockedProvider({
     thread: activeThread,
     selectedProvider: selectedProviderByThreadId,
@@ -2955,7 +2944,6 @@ function ChatViewContent(props: ChatViewProps) {
     selectedProviderInstanceId ??
     activeThread?.session?.providerInstanceId ??
     activeThread?.modelSelection.instanceId ??
-    activeProject?.defaultModelSelection?.instanceId ??
     null;
   const compactionProviderAvailable = useMemo(
     () =>
@@ -6111,7 +6099,7 @@ function ChatViewContent(props: ChatViewProps) {
     const title = truncate(titleSeed);
     const fallbackCreateModel = PROVIDERS_WITHOUT_FALLBACK_MODEL.has(ctxSelectedProvider)
       ? ""
-      : activeProject.defaultModelSelection?.model || DEFAULT_MODEL;
+      : DEFAULT_MODEL;
     const threadCreateModelSelection = createModelSelection(
       ctxSelectedModelSelection.instanceId,
       ctxSelectedModel || fallbackCreateModel,
@@ -7432,9 +7420,7 @@ function ChatViewContent(props: ChatViewProps) {
                             interactionMode={interactionMode}
                             lockedProvider={lockedProvider}
                             providerStatuses={providerStatuses as ServerProvider[]}
-                            activeProjectDefaultModelSelection={
-                              activeProject?.defaultModelSelection
-                            }
+                            activeProjectDefaultModelSelection={null}
                             activeThreadModelSelection={activeThread?.modelSelection}
                             activeContextWindow={activeContextWindow}
                             compactDisabled={compactDisabled}

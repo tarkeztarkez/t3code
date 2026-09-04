@@ -59,7 +59,7 @@ describe("chatThreadActions", () => {
     ).toEqual(CARRIED_SELECTION);
   });
 
-  it("keeps the project default above any carried selection", () => {
+  it("ignores legacy project defaults when carrying a selection", () => {
     expect(
       resolveNewThreadModelSelectionOverride({
         projectDefaultSelection: PROJECT_DEFAULT_SELECTION,
@@ -67,7 +67,7 @@ describe("chatThreadActions", () => {
         carrySourceDraftId: "draft-a",
         destinationDraftId: "draft-b",
       }),
-    ).toEqual(PROJECT_DEFAULT_SELECTION);
+    ).toEqual(CARRIED_SELECTION);
   });
 
   it("only applies the start-from-origin default to new worktree drafts", () => {

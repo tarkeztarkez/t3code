@@ -40,15 +40,13 @@ export function resolveNewDraftStartFromOrigin(input: {
 }
 
 export function resolveNewThreadModelSelectionOverride(input: {
+  /** Ignored for compatibility with callers that still send project defaults. */
   readonly projectDefaultSelection: ModelSelection | null;
   readonly carrySelection: ModelSelection | null;
   readonly carrySourceDraftId: string | null;
   readonly destinationDraftId: string;
 }): ModelSelection | null {
-  return (
-    input.projectDefaultSelection ??
-    (input.carrySourceDraftId === input.destinationDraftId ? null : input.carrySelection)
-  );
+  return input.carrySourceDraftId === input.destinationDraftId ? null : input.carrySelection;
 }
 
 export function resolveThreadActionProjectRef(

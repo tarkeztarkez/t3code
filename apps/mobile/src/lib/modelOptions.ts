@@ -106,13 +106,13 @@ export function resolveDefaultableModelSelection(
 
 export function resolveNewTaskModelSelection(input: {
   readonly draftSelection: ModelSelection | null;
+  /** Ignored for compatibility with callers that still send project defaults. */
   readonly projectDefaultSelection: ModelSelection | null;
   readonly stickySelection: ModelSelection | null;
   readonly modelOptions: ReadonlyArray<ModelOption>;
 }): ModelSelection | null {
   return (
     input.draftSelection ??
-    input.projectDefaultSelection ??
     input.stickySelection ??
     input.modelOptions.find((option) => option.isDefault)?.selection ??
     input.modelOptions[0]?.selection ??

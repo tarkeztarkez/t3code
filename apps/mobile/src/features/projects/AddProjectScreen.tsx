@@ -31,7 +31,7 @@ import {
   inferProjectTitleFromPath,
   isWindowsPlatform,
 } from "@t3tools/client-runtime/state/projects";
-import { CommandId, type EnvironmentId, type ModelSelection, ProjectId } from "@t3tools/contracts";
+import { CommandId, type EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { CommonActions, StackActions, useNavigation } from "@react-navigation/native";
 import { SymbolView } from "../../components/AppSymbol";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -66,7 +66,6 @@ interface EnvironmentOption {
   readonly label: string;
   readonly platform: string;
   readonly baseDirectory: string | null;
-  readonly defaultModelSelection: ModelSelection | null;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
   readonly connectionErrorTraceId: string | null;
@@ -354,7 +353,6 @@ function useEnvironmentOptions(): ReadonlyArray<EnvironmentOption> {
         label: connection.environmentLabel,
         platform: platformFromOs(config?.environment.platform.os ?? null),
         baseDirectory: config?.settings.addProjectBaseDirectory ?? null,
-        defaultModelSelection: config?.settings.defaultProjectModelSelection ?? null,
         connectionState: runtime?.connectionState ?? "available",
         connectionError: runtime?.connectionError ?? null,
         connectionErrorTraceId: runtime?.connectionErrorTraceId ?? null,
@@ -608,7 +606,6 @@ function useCreateProject(environment: EnvironmentOption | null) {
         projectId,
         workspaceRoot,
         createdAt: new Date().toISOString(),
-        defaultModelSelection: environment.defaultModelSelection,
       });
       const result = await createProject({
         environmentId: environment.environmentId,

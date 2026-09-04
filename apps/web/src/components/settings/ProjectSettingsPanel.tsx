@@ -14,14 +14,11 @@ import {
 } from "../../logicalProject";
 import type {
   ContextMenuItem,
-  ModelSelection,
-  ProviderDriverKind,
   SidebarProjectGroupingMode,
   T3ProjectFileScript,
   ThreadEnvMode,
 } from "@t3tools/contracts";
 import { resolveEnvModeLabel } from "../BranchToolbar.logic";
-import { createModelSelection } from "@t3tools/shared/model";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { useCanGoBack, useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
@@ -55,13 +52,6 @@ import {
 } from "../../projectScripts";
 import { decodeProjectScriptKeybindingRule } from "../../lib/projectScriptKeybindings";
 import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
-  resolveDefaultProviderModelSelection,
-  sortProviderInstanceEntries,
-} from "../../providerInstances";
-import { getCustomModelOptionsByInstance } from "../../modelSelection";
-import {
   buildSidebarProjectSnapshots,
   type SidebarProjectGroupMember,
   type SidebarProjectSnapshot,
@@ -69,10 +59,8 @@ import {
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { projectEnvironment } from "../../state/projects";
-import { primaryServerProvidersAtom, serverEnvironment } from "../../state/server";
+import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { ProviderModelPicker } from "../chat/ProviderModelPicker";
-import { TraitsPicker } from "../chat/TraitsPicker";
 import { ProjectFavicon } from "../ProjectFavicon";
 import {
   EMPTY_PROJECT_SCRIPT_INPUT,
@@ -295,7 +283,6 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
   const settings = usePrimarySettings();
   const updateClientSettings = useUpdateClientSettings();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const serverProviders = useAtomValue(primaryServerProvidersAtom);
   const threads = useThreadShells();
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const deleteProject = useAtomCommand(projectEnvironment.delete, { reportFailure: false });
@@ -362,7 +349,6 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
     async (
       input: Partial<{
         title: string;
-        defaultModelSelection: ModelSelection | null;
         defaultThreadEnvMode: ThreadEnvMode | null;
         faviconPath: string | null;
       }>,
@@ -412,30 +398,6 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
       await updateAllMembers({ title }, "Failed to rename project");
     },
     [group.memberProjects, updateAllMembers],
-  );
-
-  // ----- default model -----
-  const storedSelection = representative.defaultModelSelection;
-  const resolvedSelection = resolveDefaultProviderModelSelection(serverProviders, storedSelection);
-  const resolvedInstanceId = resolvedSelection?.instanceId ?? null;
-  const resolvedModel = resolvedSelection?.model ?? null;
-  const instanceEntries = useMemo(
-    () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
-      ),
-    [serverProviders, settings],
-  );
-  const modelOptionsByInstance = useMemo(
-    () =>
-      getCustomModelOptionsByInstance(settings, serverProviders, resolvedInstanceId, resolvedModel),
-    [resolvedInstanceId, resolvedModel, serverProviders, settings],
-  );
-  const activeEntry = instanceEntries.find((entry) => entry.instanceId === resolvedInstanceId);
-  const setDefaultModel = useCallback(
-    (selection: ModelSelection | null) =>
-      void updateAllMembers({ defaultModelSelection: selection }, "Failed to update default model"),
-    [updateAllMembers],
   );
 
   // ----- new-thread workspace mode -----
@@ -830,59 +792,6 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         </SettingsSection>
 
         <SettingsSection title="New threads">
-          <SettingsRow
-            title="Model"
-            description="New threads in this project start with this model. Applies to every checkout in this group."
-            resetAction={
-              storedSelection !== null ? (
-                <SettingResetButton
-                  label="project default model"
-                  onClick={() => setDefaultModel(null)}
-                />
-              ) : null
-            }
-            control={
-              resolvedSelection && activeEntry ? (
-                <div className="flex flex-wrap items-center justify-end gap-1.5">
-                  <ProviderModelPicker
-                    activeInstanceId={resolvedSelection.instanceId}
-                    model={resolvedSelection.model}
-                    lockedProvider={null}
-                    instanceEntries={instanceEntries}
-                    modelOptionsByInstance={modelOptionsByInstance}
-                    triggerVariant="outline"
-                    triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
-                    onInstanceModelChange={(instanceId, model) => {
-                      setDefaultModel(createModelSelection(instanceId, model));
-                    }}
-                  />
-                  <TraitsPicker
-                    provider={activeEntry.driverKind as ProviderDriverKind}
-                    models={activeEntry.models}
-                    model={resolvedSelection.model}
-                    prompt=""
-                    onPromptChange={() => {}}
-                    modelOptions={resolvedSelection.options ?? []}
-                    allowPromptInjectedEffort={false}
-                    planModeEnabled={settings.planModeEnabled}
-                    triggerVariant="outline"
-                    triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
-                    onModelOptionsChange={(nextOptions) => {
-                      setDefaultModel(
-                        createModelSelection(
-                          resolvedSelection.instanceId,
-                          resolvedSelection.model,
-                          nextOptions,
-                        ),
-                      );
-                    }}
-                  />
-                </div>
-              ) : (
-                <span className="text-sm text-muted-foreground">No providers available</span>
-              )
-            }
-          />
           <SettingsRow
             title="Workspace"
             description="Where new threads in this project start. Overrides t3.json and the global default; applies to every checkout in this group."

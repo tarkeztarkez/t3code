@@ -1,12 +1,10 @@
 # Project settings
 
-## Set the model for new projects
+## Model selection for new chats
 
-Open **Settings → General** and choose **New project model**. T3 Code copies that provider, model,
-and its selected options into each project you add after changing the setting. Existing projects
-keep their current model.
-
-Use the reset button beside the setting to return to automatic provider selection.
+New chats use your last selected provider, model, and thinking level, even when you switch
+projects or restart the app. Change them in the chat composer. Projects no longer have a
+default model. Existing conversations keep their selections.
 
 ## Customize a project icon
 

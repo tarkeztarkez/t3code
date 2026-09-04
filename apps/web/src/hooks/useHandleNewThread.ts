@@ -104,7 +104,7 @@ export function useNewThreadHandler() {
       } = useComposerDraftStore.getState();
       const currentRouteTarget = getCurrentRouteTarget();
       // A new thread carries the user's working mode from the thread being
-      // viewed. The target project's configured model still wins; runtime and
+      // viewed. The last manual model selection wins; runtime and
       // interaction modes carry independently. Branch, worktree, and env mode
       // come from configured defaults unless the caller passes them explicitly.
       const carrySourceShell =
@@ -126,8 +126,14 @@ export function useNewThreadHandler() {
       const composerModelSelection = composerActiveProvider
         ? (carrySourceComposer?.modelSelectionByProvider[composerActiveProvider] ?? null)
         : null;
+      const stickyState = useComposerDraftStore.getState();
       const carryModelSelection =
-        composerModelSelection ?? carrySourceShell?.modelSelection ?? null;
+        (stickyState.stickyActiveProvider
+          ? stickyState.stickyModelSelectionByProvider[stickyState.stickyActiveProvider]
+          : null) ??
+        composerModelSelection ??
+        carrySourceShell?.modelSelection ??
+        null;
       const carryRuntimeMode =
         carrySourceComposer?.runtimeMode ??
         carrySourceShell?.runtimeMode ??
@@ -178,7 +184,7 @@ export function useNewThreadHandler() {
       );
       const resolveModelSelectionOverride = (destinationDraftId: DraftId) =>
         resolveNewThreadModelSelectionOverride({
-          projectDefaultSelection: project?.defaultModelSelection ?? null,
+          projectDefaultSelection: null,
           carrySelection: carryModelSelection,
           carrySourceDraftId:
             currentRouteTarget?.kind === "draft" ? currentRouteTarget.draftId : null,
@@ -302,20 +308,15 @@ export function useNewThreadHandler() {
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             });
           }
-          // Model intent: an explicit human pick always stands. Seeds and
-          // legacy entries alike re-resolve here — sticky first, mirroring
-          // the mint-fresh path, then the project default or carried
-          // selection on top. This runs even when the draft is already open:
-          // without it, a changed pin could never reach the draft the user
-          // is looking at, because explicit picks are the only thing the
-          // flag protects.
+          // Keep an explicit pick in the open draft. Reused empty drafts
+          // take the latest app-wide selection instead of their stale pick.
           const storedDraft = getComposerDraft(emptyStoredDraftThread.draftId);
           const storedActiveSelection = storedDraft?.activeProvider
             ? storedDraft.modelSelectionByProvider[storedDraft.activeProvider]
             : undefined;
           const storedDraftHasExplicitModelPick =
             Boolean(storedActiveSelection) && storedDraft?.modelSelectionExplicit === true;
-          if (!storedDraftHasExplicitModelPick) {
+          if (!isDraftAlreadyOpen || !storedDraftHasExplicitModelPick) {
             applyStickyState(emptyStoredDraftThread.draftId);
             const modelSelectionOverride = resolveModelSelectionOverride(
               emptyStoredDraftThread.draftId,
@@ -457,8 +458,7 @@ export function useNewThreadHandler() {
         applyStickyState(draftId);
         const modelSelectionOverride = resolveModelSelectionOverride(draftId);
         if (modelSelectionOverride) {
-          // Project defaults and carried selections both outrank global sticky
-          // state. The project default wins when both are present.
+          // Use the saved manual selection, or the viewed thread on first use.
           setModelSelection(draftId, modelSelectionOverride, { replaceOptions: true });
         }
         carryComposerContentTo(draftId);

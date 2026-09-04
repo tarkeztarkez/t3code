@@ -419,15 +419,11 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   // Stored selections only count while their provider is usable on the
   // server; otherwise the server's default model wins instead of silently
   // targeting a disabled provider. The draft selection is an explicit pick
-  // and passes through as-is; the project default (last used, possibly from
-  // desktop) is implicit and additionally never resolves to a legacy model.
+  // and passes through as-is. The saved app-wide selection must not resolve
+  // to a legacy model.
   const draftModelSelection = resolveSelectableModelSelection(
     selectedEnvironmentServerConfig,
     selectedProjectDraft.modelSelection ?? null,
-  );
-  const projectDefaultModelSelection = resolveDefaultableModelSelection(
-    selectedEnvironmentServerConfig,
-    selectedProject?.defaultModelSelection ?? null,
   );
   const storedStickyModelSelection = useStickyComposerModelSelection();
   const stickyModelSelection = resolveDefaultableModelSelection(
@@ -438,21 +434,16 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     () =>
       buildModelOptions(
         selectedEnvironmentServerConfig,
-        draftModelSelection ?? projectDefaultModelSelection ?? stickyModelSelection,
+        draftModelSelection ?? stickyModelSelection,
       ),
-    [
-      selectedEnvironmentServerConfig,
-      draftModelSelection,
-      projectDefaultModelSelection,
-      stickyModelSelection,
-    ],
+    [selectedEnvironmentServerConfig, draftModelSelection, stickyModelSelection],
   );
 
-  // An unsent draft keeps its explicit pick. Fresh drafts resolve the project
-  // default before the last manual app-wide selection and provider default.
+  // An unsent draft keeps its explicit pick. Fresh drafts use the last
+  // manual app-wide selection before the provider default.
   const selectedModel = resolveNewTaskModelSelection({
     draftSelection: draftModelSelection,
-    projectDefaultSelection: projectDefaultModelSelection,
+    projectDefaultSelection: null,
     stickySelection: stickyModelSelection,
     modelOptions,
   });
