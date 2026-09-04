@@ -178,6 +178,25 @@ describe("spawnPiRpcSession", () => {
     ),
   );
 
+  it.effect("passes resource discovery disable flags to Pi", () =>
+    spawnWithFakeProcess(({ spawnedArgs }) =>
+      Effect.gen(function* () {
+        yield* spawnPiRpcSession({
+          binaryPath: "pi",
+          cwd: process.cwd(),
+          runtimeMode: "auto",
+          noSkills: true,
+          noPromptTemplates: true,
+          noContextFiles: true,
+        });
+
+        expect(spawnedArgs[0]).toContain("--no-skills");
+        expect(spawnedArgs[0]).toContain("--no-prompt-templates");
+        expect(spawnedArgs[0]).toContain("--no-context-files");
+      }),
+    ),
+  );
+
   it.effect("passes an exact session id to Pi", () =>
     spawnWithFakeProcess(({ spawnedArgs }) =>
       Effect.gen(function* () {

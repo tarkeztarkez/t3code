@@ -466,6 +466,9 @@ export interface SpawnPiRpcInput {
   readonly noExtensions?: boolean;
   readonly noSession?: boolean;
   readonly noTools?: boolean;
+  readonly noSkills?: boolean;
+  readonly noPromptTemplates?: boolean;
+  readonly noContextFiles?: boolean;
   readonly mcpConfigPath?: string;
   readonly appendSystemPrompt?: string;
 }
@@ -489,6 +492,9 @@ export const spawnPiRpcSession = (
       ...(input.noExtensions ? ["--no-extensions"] : []),
       ...(input.noSession ? ["--no-session"] : []),
       ...(input.noTools ? ["--no-tools"] : []),
+      ...(input.noSkills ? ["--no-skills"] : []),
+      ...(input.noPromptTemplates ? ["--no-prompt-templates"] : []),
+      ...(input.noContextFiles ? ["--no-context-files"] : []),
       ...(input.sessionId ? ["--session", input.sessionId] : []),
       ...(input.mcpConfigPath ? ["--mcp-config", input.mcpConfigPath] : []),
       ...(input.appendSystemPrompt ? ["--append-system-prompt", input.appendSystemPrompt] : []),

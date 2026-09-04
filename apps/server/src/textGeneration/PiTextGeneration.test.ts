@@ -4,14 +4,18 @@ import { it } from "@effect/vitest";
 import { PiSettings, ProviderInstanceId, TextGenerationError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { beforeEach } from "vite-plus/test";
 
 import {
   PiRuntime,
   PiRuntimeError,
   type PiCommandResult,
+  type PiRpcEvent,
   type PiRuntimeShape,
+  type SpawnPiRpcInput,
 } from "../provider/piRuntime.ts";
 import { makePiTextGeneration } from "./PiTextGeneration.ts";
 import type * as TextGeneration from "./TextGeneration.ts";
@@ -26,41 +30,88 @@ const DEFAULT_MODEL_SELECTION = {
 
 const runtimeMock = {
   state: {
-    calls: [] as Array<{
-      readonly binaryPath: string;
-      readonly args: ReadonlyArray<string>;
-      readonly cwd: string | undefined;
-      readonly stdin: string | undefined;
-    }>,
+    calls: [] as Array<Record<string, unknown>>,
+    spawnInputs: [] as Array<SpawnPiRpcInput>,
     results: [] as Array<PiCommandResult>,
     error: null as PiRuntimeError | null,
+    assistantError: null as string | null,
   },
   reset() {
     this.state.calls.length = 0;
+    this.state.spawnInputs.length = 0;
     this.state.results.length = 0;
     this.state.error = null;
+    this.state.assistantError = null;
   },
 };
 
 const PiRuntimeTestDouble: PiRuntimeShape = {
-  spawnSession: () =>
+  spawnSession: (input) =>
+    Effect.gen(function* () {
+      runtimeMock.state.spawnInputs.push(input);
+      const events = yield* Queue.unbounded<PiRpcEvent>();
+      let currentOutput = "";
+      return {
+        request: (command: Record<string, unknown>) =>
+          Effect.gen(function* () {
+            runtimeMock.state.calls.push(command);
+            if (runtimeMock.state.error) return yield* runtimeMock.state.error;
+            if (command.type === "prompt") {
+              const result = runtimeMock.state.results.shift() ?? {
+                stdout: "{}",
+                stderr: "",
+                code: 0,
+              };
+              if (result.code !== 0) {
+                return yield* new PiRuntimeError({
+                  operation: "prompt",
+                  detail: result.stderr.trim() || result.stdout.trim(),
+                });
+              }
+              currentOutput = result.stdout;
+              yield* Queue.offer(events, { type: "agent_end" });
+            }
+            if (command.type === "get_messages") {
+              return {
+                type: "response" as const,
+                command: "get_messages",
+                success: true as const,
+                data: {
+                  messages: [
+                    {
+                      role: "assistant",
+                      content: currentOutput,
+                      ...(runtimeMock.state.assistantError
+                        ? {
+                            stopReason: "error",
+                            errorMessage: runtimeMock.state.assistantError,
+                          }
+                        : {}),
+                    },
+                  ],
+                },
+              };
+            }
+            return {
+              type: "response" as const,
+              command: String(command.type),
+              success: true as const,
+              data: command.type === "get_state" ? { sessionId: "utility-session" } : undefined,
+            };
+          }),
+        notify: () => Effect.void,
+        events,
+        exitCode: Effect.never,
+        stderr: Effect.succeed(""),
+      };
+    }),
+  runCommand: () =>
     Effect.fail(
       new PiRuntimeError({
-        operation: "spawnSession",
-        detail: "PiRuntimeTestDouble.spawnSession not used in text generation tests",
+        operation: "runCommand",
+        detail: "Reusable text generation must not launch one-shot Pi commands.",
       }),
     ),
-  runCommand: (input) =>
-    Effect.gen(function* () {
-      runtimeMock.state.calls.push({
-        binaryPath: input.binaryPath,
-        args: input.args,
-        cwd: input.cwd,
-        stdin: input.stdin,
-      });
-      if (runtimeMock.state.error) return yield* runtimeMock.state.error;
-      return runtimeMock.state.results.shift() ?? { stdout: "{}", stderr: "", code: 0 };
-    }),
 };
 
 const PiTextGenerationTestLayer = Layer.succeed(PiRuntime, PiRuntimeTestDouble);
@@ -90,7 +141,7 @@ beforeEach(() => {
 });
 
 it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
-  it.effect("generates commit messages through Pi CLI JSON mode", () =>
+  it.effect("generates commit messages through the Pi utility session", () =>
     withPiTextGeneration((textGeneration) =>
       Effect.gen(function* () {
         queueJson({
@@ -113,33 +164,28 @@ it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
           body: "Exercise every Pi text generation method.",
           branch: "feature/pi-text-generation-coverage",
         });
-        NodeAssert.equal(runtimeMock.state.calls.length, 1);
-
-        const args = runtimeMock.state.calls[0]?.args ?? [];
-        NodeAssert.deepEqual(args.slice(0, 14), [
-          "--print",
-          "--mode",
-          "text",
-          "--no-session",
-          "--no-tools",
-          "--no-extensions",
-          "--no-skills",
-          "--no-prompt-templates",
-          "--no-context-files",
-          "--thinking",
-          "off",
-          "--provider",
-          "anthropic",
-          "--model",
-        ]);
-        NodeAssert.equal(args[14], "claude-haiku-4-5");
-        NodeAssert.equal(args.includes("Staged files:"), false);
-        NodeAssert.match(String(runtimeMock.state.calls[0]?.stdin), /Staged files:/);
+        NodeAssert.equal(runtimeMock.state.spawnInputs.length, 1);
+        NodeAssert.deepEqual(runtimeMock.state.spawnInputs[0], {
+          binaryPath: "fake-pi",
+          cwd: process.cwd(),
+          environment: { T3_TEST_ENV: "1" },
+          runtimeMode: "auto",
+          modelSlug: "anthropic/claude-haiku-4-5",
+          thinkingLevel: "off",
+          noSession: true,
+          noTools: true,
+          noExtensions: true,
+          noSkills: true,
+          noPromptTemplates: true,
+          noContextFiles: true,
+        });
+        const prompt = runtimeMock.state.calls.find((call) => call.type === "prompt");
+        NodeAssert.match(String(prompt?.message), /Staged files:/);
       }),
     ),
   );
 
-  it.effect("generates PR content through Pi CLI JSON mode", () =>
+  it.effect("generates PR content through the Pi utility session", () =>
     withPiTextGeneration((textGeneration) =>
       Effect.gen(function* () {
         queueJson({ title: "Add Pi provider tests", body: "Covers provider and adapter flows." });
@@ -158,16 +204,14 @@ it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
           title: "Add Pi provider tests",
           body: "Covers provider and adapter flows.",
         });
-        NodeAssert.equal(runtimeMock.state.calls.length, 1);
-        NodeAssert.match(
-          String(runtimeMock.state.calls[0]?.stdin),
-          /source control change request content/,
-        );
+        NodeAssert.equal(runtimeMock.state.spawnInputs.length, 1);
+        const prompt = runtimeMock.state.calls.find((call) => call.type === "prompt");
+        NodeAssert.match(String(prompt?.message), /source control change request content/);
       }),
     ),
   );
 
-  it.effect("generates branch names through Pi CLI JSON mode", () =>
+  it.effect("generates branch names through the Pi utility session", () =>
     withPiTextGeneration((textGeneration) =>
       Effect.gen(function* () {
         queueJson({ branch: "pi-provider-tests" });
@@ -179,13 +223,14 @@ it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
         });
 
         NodeAssert.deepEqual(branch, { branch: "pi-provider-tests" });
-        NodeAssert.equal(runtimeMock.state.calls.length, 1);
-        NodeAssert.match(String(runtimeMock.state.calls[0]?.stdin), /branch names/);
+        NodeAssert.equal(runtimeMock.state.spawnInputs.length, 1);
+        const prompt = runtimeMock.state.calls.find((call) => call.type === "prompt");
+        NodeAssert.match(String(prompt?.message), /branch names/);
       }),
     ),
   );
 
-  it.effect("generates thread titles through Pi CLI JSON mode", () =>
+  it.effect("generates thread titles through the Pi utility session", () =>
     withPiTextGeneration((textGeneration) =>
       Effect.gen(function* () {
         queueJson({ title: "Debug Pi provider setup" });
@@ -197,11 +242,9 @@ it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
         });
 
         NodeAssert.deepEqual(title, { title: "Debug Pi provider setup" });
-        NodeAssert.equal(runtimeMock.state.calls.length, 1);
-        NodeAssert.match(
-          String(runtimeMock.state.calls[0]?.stdin),
-          /recognize this T3 Code thread/,
-        );
+        NodeAssert.equal(runtimeMock.state.spawnInputs.length, 1);
+        const prompt = runtimeMock.state.calls.find((call) => call.type === "prompt");
+        NodeAssert.match(String(prompt?.message), /recognize this T3 Code thread/);
       }),
     ),
   );
@@ -220,9 +263,132 @@ it.layer(PiTextGenerationTestLayer)("PiTextGeneration", (it) => {
           },
         });
 
-        const args = runtimeMock.state.calls[0]?.args ?? [];
-        NodeAssert.equal(args[12], "openrouter");
-        NodeAssert.equal(args[14], "qwen/qwen3-coder");
+        const setModel = runtimeMock.state.calls.find((call) => call.type === "set_model");
+        NodeAssert.equal(setModel?.provider, "openrouter");
+        NodeAssert.equal(setModel?.modelId, "qwen/qwen3-coder");
+      }),
+    ),
+  );
+
+  it.effect("reuses the utility process with a fresh session", () =>
+    withPiTextGeneration((textGeneration) =>
+      Effect.gen(function* () {
+        queueJson({ title: "First title" });
+        queueJson({ title: "Second title" });
+
+        yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "First request",
+          modelSelection: DEFAULT_MODEL_SELECTION,
+        });
+        yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Second request",
+          modelSelection: DEFAULT_MODEL_SELECTION,
+        });
+
+        NodeAssert.equal(runtimeMock.state.spawnInputs.length, 1);
+        NodeAssert.equal(
+          runtimeMock.state.calls.filter((call) => call.type === "new_session").length,
+          1,
+        );
+      }),
+    ),
+  );
+
+  it.effect("restarts the utility process when the working directory changes", () =>
+    withPiTextGeneration((textGeneration) =>
+      Effect.gen(function* () {
+        queueJson({ title: "First project" });
+        queueJson({ title: "Second project" });
+
+        yield* textGeneration.generateThreadTitle({
+          cwd: "/tmp/pi-project-one",
+          message: "First request",
+          modelSelection: DEFAULT_MODEL_SELECTION,
+        });
+        yield* textGeneration.generateThreadTitle({
+          cwd: "/tmp/pi-project-two",
+          message: "Second request",
+          modelSelection: DEFAULT_MODEL_SELECTION,
+        });
+
+        NodeAssert.deepEqual(
+          runtimeMock.state.spawnInputs.map((input) => input.cwd),
+          ["/tmp/pi-project-one", "/tmp/pi-project-two"],
+        );
+      }),
+    ),
+  );
+
+  it.effect("closes the utility process after five idle minutes", () =>
+    withPiTextGeneration((textGeneration) =>
+      Effect.gen(function* () {
+        queueJson({ title: "Before idle" });
+        yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Before idle",
+          modelSelection: DEFAULT_MODEL_SELECTION,
+        });
+
+        yield* TestClock.adjust("5 minutes");
+
+        queueJson({ title: "After idle" });
+        yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "After idle",
+          modelSelection: DEFAULT_MODEL_SELECTION,
+        });
+        NodeAssert.equal(runtimeMock.state.spawnInputs.length, 2);
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  it.effect("discards the utility process after an RPC error", () =>
+    withPiTextGeneration((textGeneration) =>
+      Effect.gen(function* () {
+        runtimeMock.state.error = new PiRuntimeError({
+          operation: "set_model",
+          detail: "temporary RPC failure",
+        });
+        yield* textGeneration
+          .generateThreadTitle({
+            cwd: process.cwd(),
+            message: "Fail this request",
+            modelSelection: DEFAULT_MODEL_SELECTION,
+          })
+          .pipe(Effect.flip);
+
+        runtimeMock.state.error = null;
+        queueJson({ title: "Recovered" });
+        const result = yield* textGeneration.generateThreadTitle({
+          cwd: process.cwd(),
+          message: "Retry this request",
+          modelSelection: DEFAULT_MODEL_SELECTION,
+        });
+
+        NodeAssert.deepEqual(result, { title: "Recovered" });
+        NodeAssert.equal(runtimeMock.state.spawnInputs.length, 2);
+      }),
+    ),
+  );
+
+  it.effect("surfaces assistant API errors from the utility session", () =>
+    withPiTextGeneration((textGeneration) =>
+      Effect.gen(function* () {
+        runtimeMock.state.assistantError = "Provider credits exhausted";
+        runtimeMock.state.results.push({ stdout: "", stderr: "", code: 0 });
+
+        const error = yield* textGeneration
+          .generateThreadTitle({
+            cwd: process.cwd(),
+            message: "Title this request",
+            modelSelection: DEFAULT_MODEL_SELECTION,
+          })
+          .pipe(Effect.flip);
+
+        NodeAssert.ok(isTextGenerationError(error));
+        NodeAssert.equal(error.detail, "Provider credits exhausted");
       }),
     ),
   );
