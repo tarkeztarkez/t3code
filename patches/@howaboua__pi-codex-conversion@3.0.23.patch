@@ -30,6 +30,19 @@ index 3295a3aa7be1a33f8ac5d0bc78b489fa16df9ddf..914c9d1d5351dc9538e6645c364d7780
              ...(cacheEnvironment.diagnostics !== undefined
                  ? { cacheDiagnostics: cacheEnvironment.diagnostics }
                  : {}),
+diff --git a/dist/tools/native/binary.js b/dist/tools/native/binary.js
+index 403b08f7741f82a1529fcfd6433c29d16e72ec92..9740468a52fb4a976f04e0a8ffd43474cf15d093 100644
+--- a/dist/tools/native/binary.js
++++ b/dist/tools/native/binary.js
+@@ -22,6 +22,7 @@ export function getBundledToolBinaryPath(toolName, target = {}, customDir) {
+         if (existsSync(customBinary))
+             return customBinary;
+     }
+-    const binary = join(packageRoot(), "src", "tools", toolDir, "bin", `${platform}-${arch}`, exe);
++    const root = packageRoot().replace(/([\\/]app\.asar)(?=[\\/])/, "$1.unpacked");
++    const binary = join(root, "src", "tools", toolDir, "bin", `${platform}-${arch}`, exe);
+     return existsSync(binary) ? binary : undefined;
+ }
 diff --git a/src/adapter/activation/config-store.ts b/src/adapter/activation/config-store.ts
 index 2c2e7859d38509a042b7d541ba1deaad83218c10..acd768ae1c3bfede8c6accf1f1ba4f11903ae809 100644
 --- a/src/adapter/activation/config-store.ts
@@ -63,3 +76,11 @@ index 2c2e7859d38509a042b7d541ba1deaad83218c10..acd768ae1c3bfede8c6accf1f1ba4f11
  			...(cacheEnvironment.diagnostics !== undefined
  				? { cacheDiagnostics: cacheEnvironment.diagnostics }
  				: {}),
+diff --git a/src/tools/native/binary.ts b/src/tools/native/binary.ts
+index aa7be274e49e1d38ee2f4db325bcde26e0dff0b2..dc6f0edd52f36b9ddc60521bdc830bf2c5a79848 100644
+--- a/src/tools/native/binary.ts
++++ b/src/tools/native/binary.ts
+@@ -27 +27,2 @@ export function getBundledToolBinaryPath(toolName: string, target: { platform?:
+-	const binary = join(packageRoot(), "src", "tools", toolDir, "bin", `${platform}-${arch}`, exe);
++	const root = packageRoot().replace(/([\\/]app\.asar)(?=[\\/])/, "$1.unpacked");
++	const binary = join(root, "src", "tools", toolDir, "bin", `${platform}-${arch}`, exe);
