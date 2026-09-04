@@ -872,6 +872,89 @@ describe("ProviderRuntimeIngestion", () => {
     );
   });
 
+  it("clears the active turn when the provider confirms it was aborted", async () => {
+    const harness = await createHarness();
+    const threadId = asThreadId("thread-1");
+    const turnId = asTurnId("turn-aborted");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-before-abort"),
+      provider: ProviderDriverKind.make("pi"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      threadId,
+      turnId,
+    });
+
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "running" && thread.session.activeTurnId === turnId,
+    );
+
+    await harness.dispatch({
+      type: "thread.turn.interrupt",
+      commandId: CommandId.make("cmd-interrupt-before-provider-abort"),
+      threadId,
+      turnId,
+      createdAt: "2026-01-01T00:00:00.500Z",
+    });
+
+    harness.emit({
+      type: "turn.aborted",
+      eventId: asEventId("evt-turn-aborted"),
+      provider: ProviderDriverKind.make("pi"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      threadId,
+      turnId,
+      payload: { reason: "Interrupted by user." },
+    });
+
+    await waitForThread(
+      harness.readModel,
+      (thread) =>
+        thread.session?.status === "ready" &&
+        thread.session.activeTurnId === null &&
+        thread.latestTurn?.state === "interrupted",
+    );
+  });
+
+  it("ignores an abort for a turn other than the active turn", async () => {
+    const harness = await createHarness();
+    const threadId = asThreadId("thread-1");
+    const activeTurnId = asTurnId("turn-active-during-stale-abort");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-before-stale-abort"),
+      provider: ProviderDriverKind.make("pi"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      threadId,
+      turnId: activeTurnId,
+    });
+
+    await waitForThread(
+      harness.readModel,
+      (thread) =>
+        thread.session?.status === "running" && thread.session.activeTurnId === activeTurnId,
+    );
+
+    harness.emit({
+      type: "turn.aborted",
+      eventId: asEventId("evt-stale-turn-aborted"),
+      provider: ProviderDriverKind.make("pi"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      threadId,
+      turnId: asTurnId("turn-stale-aborted"),
+      payload: { reason: "Interrupted by user." },
+    });
+
+    await harness.drain();
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    expect(thread?.session?.status).toBe("running");
+    expect(thread?.session?.activeTurnId).toBe(activeTurnId);
+  });
+
   it("rejects an untargeted turn.completed when no turn is active", async () => {
     const harness = await createHarness();
     const seededAt = "2026-01-01T00:00:00.000Z";
