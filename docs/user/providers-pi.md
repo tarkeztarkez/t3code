@@ -6,6 +6,10 @@ Bundled Pi lists GPT-6 Astra as `openai-codex/gpt-6-astra`. Connect Pi to your C
 subscription in **Settings > Providers** to use it. OpenAI is rolling access out by account, so the
 model can appear in T3 Code before your account is allowed to run it.
 
+Astra supports the same Code and Notebook modes as Sol in the bundled Pi extension.
+Notebook mode exposes `exec`, `wait`, and `notebook`. With cache keepalive enabled,
+Astra uses the same 25-minute interval as Sol. Normal mode remains available.
+
 ## Skills
 
 Type `$` in the composer to search the skills Pi makes available for the current project. T3 Code

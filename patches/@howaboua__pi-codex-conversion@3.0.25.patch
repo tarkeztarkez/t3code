@@ -84,3 +84,27 @@ index aa7be274e49e1d38ee2f4db325bcde26e0dff0b2..dc6f0edd52f36b9ddc60521bdc830bf2
 -	const binary = join(packageRoot(), "src", "tools", toolDir, "bin", `${platform}-${arch}`, exe);
 +	const root = packageRoot().replace(/([\\/]app\.asar)(?=[\\/])/, "$1.unpacked");
 +	const binary = join(root, "src", "tools", toolDir, "bin", `${platform}-${arch}`, exe);
+diff --git a/dist/providers/openai-codex/responses-lite-model.js b/dist/providers/openai-codex/responses-lite-model.js
+--- a/dist/providers/openai-codex/responses-lite-model.js
++++ b/dist/providers/openai-codex/responses-lite-model.js
+@@ -6 +6 @@
+-    return /^(?:gpt-5\.6-(?:luna|terra|sol)|gpt-daybreak-(?:blue|red)-latest)$/.test(id.toLowerCase());
++    return /^(?:gpt-6-astra|gpt-5\.6-(?:luna|terra|sol)|gpt-daybreak-(?:blue|red)-latest)$/.test(id.toLowerCase());
+diff --git a/src/providers/openai-codex/responses-lite-model.ts b/src/providers/openai-codex/responses-lite-model.ts
+--- a/src/providers/openai-codex/responses-lite-model.ts
++++ b/src/providers/openai-codex/responses-lite-model.ts
+@@ -7 +7 @@
+-	return /^(?:gpt-5\.6-(?:luna|terra|sol)|gpt-daybreak-(?:blue|red)-latest)$/.test(id.toLowerCase());
++	return /^(?:gpt-6-astra|gpt-5\.6-(?:luna|terra|sol)|gpt-daybreak-(?:blue|red)-latest)$/.test(id.toLowerCase());
+diff --git a/dist/adapter/activation/cache-keepalive.js b/dist/adapter/activation/cache-keepalive.js
+--- a/dist/adapter/activation/cache-keepalive.js
++++ b/dist/adapter/activation/cache-keepalive.js
+@@ -13 +13 @@
+-    if ((modelId === "gpt-5.6-sol" || modelId === "gpt-5.6-terra") && config.cacheKeepalive) {
++    if ((modelId === "gpt-6-astra" || modelId === "gpt-5.6-sol" || modelId === "gpt-5.6-terra") && config.cacheKeepalive) {
+diff --git a/src/adapter/activation/cache-keepalive.ts b/src/adapter/activation/cache-keepalive.ts
+--- a/src/adapter/activation/cache-keepalive.ts
++++ b/src/adapter/activation/cache-keepalive.ts
+@@ -26 +26 @@
+-	if ((modelId === "gpt-5.6-sol" || modelId === "gpt-5.6-terra") && config.cacheKeepalive) {
++	if ((modelId === "gpt-6-astra" || modelId === "gpt-5.6-sol" || modelId === "gpt-5.6-terra") && config.cacheKeepalive) {
