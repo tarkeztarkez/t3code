@@ -5,6 +5,7 @@ import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
@@ -16,6 +17,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as ElectronRelaunch from "../electron/ElectronRelaunch.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
@@ -32,6 +34,8 @@ interface UpdatesHarnessOptions {
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
   readonly stopBackend?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
+  readonly appImagePath?: string;
+  readonly platform?: NodeJS.Platform;
 }
 
 const flushCallbacks = Effect.yieldNow;
@@ -43,6 +47,8 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
   const sentStates: DesktopUpdateState[] = [];
+  const relaunches: Array<{ readonly execPath: string; readonly args: ReadonlyArray<string> }> = [];
+  let updaterQuitAndInstallCount = 0;
 
   const addListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
     const eventListeners = listeners.get(eventName) ?? new Set();
@@ -84,7 +90,10 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
       checkCount += 1;
     }).pipe(Effect.andThen(options.checkForUpdates ?? Effect.void)),
     downloadUpdate: Effect.void,
-    quitAndInstall: () => Effect.void,
+    quitAndInstall: () =>
+      Effect.sync(() => {
+        updaterQuitAndInstallCount += 1;
+      }),
     on: (eventName, listener) =>
       Effect.acquireRelease(
         Effect.sync(() => {
@@ -96,6 +105,12 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
           }),
       ).pipe(Effect.asVoid),
   } satisfies ElectronUpdater.ElectronUpdater["Service"]);
+
+  const relaunchLayer = ElectronRelaunch.layer((options) =>
+    Effect.sync(() => {
+      relaunches.push(options);
+    }),
+  );
 
   const windowLayer = Layer.succeed(ElectronWindow.ElectronWindow, {
     create: () => Effect.die("unexpected BrowserWindow creation"),
@@ -133,7 +148,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   const environmentLayer = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
     homeDirectory: `/tmp/t3-desktop-updates-home-${process.pid}`,
-    platform: "darwin",
+    platform: options.platform ?? "darwin",
     processArch: "x64",
     appVersion: "1.2.3",
     appPath: "/repo",
@@ -148,6 +163,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
           T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
           T3CODE_DESKTOP_MOCK_UPDATES: "true",
           T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
+          APPIMAGE: options.appImagePath,
           ...options.env,
         }),
       ),
@@ -192,6 +208,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   const layer = DesktopUpdates.layer.pipe(
     Layer.provideMerge(updaterLayer),
+    Layer.provideMerge(relaunchLayer),
     Layer.provideMerge(windowLayer),
     Layer.provideMerge(backendLayer),
     Layer.provideMerge(DesktopState.layer),
@@ -201,6 +218,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
         T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
         T3CODE_DESKTOP_MOCK_UPDATES: "true",
         T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
+        APPIMAGE: options.appImagePath,
         ...options.env,
       }),
     ),
@@ -213,6 +231,8 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     checkCount: () => checkCount,
     feedUrls: () => feedUrls,
     fullChangelog: () => fullChangelog,
+    relaunches: () => relaunches,
+    updaterQuitAndInstallCount: () => updaterQuitAndInstallCount,
     listenerCount: () =>
       Array.from(listeners.values()).reduce(
         (total, eventListeners) => total + eventListeners.size,
@@ -312,6 +332,40 @@ describe("DesktopUpdates", () => {
         assert.equal(harness.sentStates.at(-1)?.status, "available");
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("offers the existing restart action when the running AppImage is replaced", () => {
+    const appImagePath = `/tmp/t3-desktop-replaced-${process.pid}.AppImage`;
+    const harness = makeHarness({ appImagePath, platform: "linux" });
+
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      yield* fileSystem.writeFileString(appImagePath, "first build");
+      yield* Effect.addFinalizer(() =>
+        fileSystem.remove(appImagePath, { force: true }).pipe(Effect.ignore),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+          yield* fileSystem.writeFileString(appImagePath, "replacement build");
+          yield* TestClock.adjust(Duration.seconds(2));
+
+          const state = yield* updates.getState;
+          assert.equal(state.enabled, true);
+          assert.equal(state.status, "downloaded");
+          assert.equal(state.downloadedVersion, "1.2.3");
+
+          const result = yield* updates.install;
+          assert.isTrue(result.accepted);
+          assert.deepEqual(harness.relaunches(), [
+            { execPath: appImagePath, args: process.argv.slice(1) },
+          ]);
+          assert.equal(harness.updaterQuitAndInstallCount(), 0);
+        }),
+      );
+    }).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
   it.effect("enables nightly full changelog release notes and broadcasts summaries", () => {

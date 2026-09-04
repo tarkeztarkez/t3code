@@ -23,6 +23,7 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopState from "../app/DesktopState.ts";
+import * as ElectronRelaunch from "../electron/ElectronRelaunch.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
@@ -44,11 +45,19 @@ import {
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
+const APP_IMAGE_REPLACEMENT_POLL_INTERVAL = "2 seconds";
 
 type UpdateAction = "check" | "download" | "install" | "channel";
 
 const AppUpdateYmlConfig = Schema.Record(Schema.String, Schema.String);
 type AppUpdateYmlConfig = typeof AppUpdateYmlConfig.Type;
+
+interface AppImageFingerprint {
+  readonly device: number;
+  readonly inode: number | null;
+  readonly modifiedAt: number | null;
+  readonly size: bigint;
+}
 
 const UpdateInfo = Schema.Struct({
   version: Schema.String,
@@ -246,10 +255,29 @@ function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean 
   return runtimeInfo.hostArch === "arm64" && runtimeInfo.appArch === "x64";
 }
 
+function appImageFingerprint(info: FileSystem.File.Info): AppImageFingerprint {
+  return {
+    device: info.dev,
+    inode: Option.getOrNull(info.ino),
+    modifiedAt: Option.map(info.mtime, (mtime) => mtime.getTime()).pipe(Option.getOrNull),
+    size: info.size,
+  };
+}
+
+function appImageWasReplaced(initial: AppImageFingerprint, current: AppImageFingerprint): boolean {
+  return (
+    initial.device !== current.device ||
+    initial.inode !== current.inode ||
+    initial.modifiedAt !== current.modifiedAt ||
+    initial.size !== current.size
+  );
+}
+
 export const make = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const desktopState = yield* DesktopState.DesktopState;
+  const electronRelaunch = yield* ElectronRelaunch.ElectronRelaunch;
   const electronUpdater = yield* ElectronUpdater.ElectronUpdater;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -260,6 +288,7 @@ export const make = Effect.gen(function* () {
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
   const updaterConfiguredRef = yield* Ref.make(false);
   const lastLoggedDownloadMilestoneRef = yield* Ref.make(-1);
+  const localAppImageReplacementRef = yield* Ref.make(false);
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
     createInitialDesktopUpdateState(
       environment.appVersion,
@@ -464,6 +493,7 @@ export const make = Effect.gen(function* () {
 
   const installDownloadedUpdate = Effect.gen(function* () {
     const state = yield* Ref.get(updateStateRef);
+    const hasLocalAppImageReplacement = yield* Ref.get(localAppImageReplacementRef);
     const hasInstallableDownload =
       state.downloadedVersion !== null &&
       (state.status === "downloaded" ||
@@ -471,7 +501,7 @@ export const make = Effect.gen(function* () {
           (state.errorContext === null || state.errorContext === "install")));
     if (
       (yield* Ref.get(desktopState.quitting)) ||
-      !(yield* Ref.get(updaterConfiguredRef)) ||
+      (!(yield* Ref.get(updaterConfiguredRef)) && !hasLocalAppImageReplacement) ||
       !hasInstallableDownload
     ) {
       return { accepted: false, completed: false };
@@ -498,6 +528,18 @@ export const make = Effect.gen(function* () {
         { concurrency: "unbounded" },
       );
       yield* electronWindow.destroyAll;
+      if (hasLocalAppImageReplacement) {
+        const appImagePath = Option.getOrUndefined(config.appImagePath);
+        if (!appImagePath) {
+          return yield* Effect.die("Local AppImage replacement lost its launch path.");
+        }
+        yield* logUpdaterInfo("restarting into locally replaced AppImage", { appImagePath });
+        yield* electronRelaunch.relaunch({
+          execPath: appImagePath,
+          args: process.argv.slice(1),
+        });
+        return { accepted: true, completed: false };
+      }
       yield* electronUpdater.quitAndInstall({
         isSilent: true,
         isForceRunAfter: true,
@@ -541,6 +583,56 @@ export const make = Effect.gen(function* () {
       ),
     );
   }).pipe(Effect.withSpan("desktop.updates.installDownloadedUpdate"));
+
+  const startAppImageReplacementPoller: Effect.Effect<void, never, Scope.Scope> = Effect.gen(
+    function* () {
+      const appImagePath = Option.getOrUndefined(config.appImagePath);
+      if (environment.platform !== "linux" || !environment.isPackaged || !appImagePath) return;
+
+      const initial = yield* fileSystem
+        .stat(appImagePath)
+        .pipe(Effect.map(appImageFingerprint), Effect.option);
+      if (Option.isNone(initial)) return;
+
+      yield* Effect.sleep(APP_IMAGE_REPLACEMENT_POLL_INTERVAL).pipe(
+        Effect.andThen(
+          fileSystem.stat(appImagePath).pipe(
+            Effect.map(appImageFingerprint),
+            Effect.option,
+            Effect.flatMap(
+              Option.match({
+                onNone: () => Effect.void,
+                onSome: (current) =>
+                  Effect.gen(function* () {
+                    if (
+                      (yield* Ref.get(localAppImageReplacementRef)) ||
+                      !appImageWasReplaced(initial.value, current)
+                    ) {
+                      return;
+                    }
+                    yield* Ref.set(localAppImageReplacementRef, true);
+                    yield* updateState((state) => ({
+                      ...reduceDesktopUpdateStateOnDownloadComplete(state, environment.appVersion),
+                      enabled: true,
+                    }));
+                    yield* logUpdaterInfo("local AppImage replacement detected", {
+                      appImagePath,
+                    });
+                  }),
+              }),
+            ),
+          ),
+        ),
+        Effect.forever,
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : logUpdaterWarning("local AppImage replacement poller failed", { cause }),
+        ),
+        Effect.forkScoped,
+      );
+    },
+  ).pipe(Effect.withSpan("desktop.updates.startAppImageReplacementPoller"));
 
   const startUpdatePollers: Effect.Effect<void, never, Scope.Scope> = Effect.gen(function* () {
     yield* Effect.sleep(AUTO_UPDATE_STARTUP_DELAY).pipe(
@@ -744,6 +836,7 @@ export const make = Effect.gen(function* () {
       const settings = yield* desktopSettings.get;
       const enabled = yield* shouldEnableAutoUpdates;
       yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
+      yield* startAppImageReplacementPoller;
       if (!enabled) {
         return;
       }
