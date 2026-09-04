@@ -327,6 +327,24 @@ describe("ServerSettings worktree defaults", () => {
   });
 });
 
+describe("ServerSettings new project model", () => {
+  it("uses automatic provider selection until the user chooses a default", () => {
+    expect(decodeServerSettings({}).defaultProjectModelSelection).toBeNull();
+  });
+
+  it("accepts an explicit provider and model", () => {
+    const selection = {
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      model: "claude-opus-4-6",
+    };
+
+    expect(
+      decodeServerSettingsPatch({ defaultProjectModelSelection: selection })
+        .defaultProjectModelSelection,
+    ).toEqual(selection);
+  });
+});
+
 describe("ServerSettings.sourceControlWritingStyle", () => {
   it("defaults all style settings for legacy configs", () => {
     const settings = decodeServerSettings({});

@@ -1756,9 +1756,11 @@ function OpenCommandPaletteDialog(props: {
       }
 
       const projectId = newProjectId();
+      const targetEnvironmentConfig = environments.find(
+        (environment) => environment.environmentId === input.environmentId,
+      )?.serverConfig;
       const targetEnvironmentProviders =
-        environments.find((environment) => environment.environmentId === input.environmentId)
-          ?.serverConfig?.providers ??
+        targetEnvironmentConfig?.providers ??
         (input.environmentId === primaryEnvironmentId ? providers : []);
       const createResult = await createProject({
         environmentId: input.environmentId,
@@ -1769,7 +1771,7 @@ function OpenCommandPaletteDialog(props: {
           createWorkspaceRootIfMissing: true,
           defaultModelSelection: resolveDefaultProviderModelSelection(
             targetEnvironmentProviders,
-            null,
+            targetEnvironmentConfig?.settings.defaultProjectModelSelection ?? null,
           ),
         },
       });

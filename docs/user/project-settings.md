@@ -1,4 +1,14 @@
-# Customize a project icon
+# Project settings
+
+## Set the model for new projects
+
+Open **Settings → General** and choose **New project model**. T3 Code copies that provider, model,
+and its selected options into each project you add after changing the setting. Existing projects
+keep their current model.
+
+Use the reset button beside the setting to return to automatic provider selection.
+
+## Customize a project icon
 
 T3 Code selects a project icon automatically. It checks `t3.json`, common favicon and app icon
 paths, and icon links in project HTML files.

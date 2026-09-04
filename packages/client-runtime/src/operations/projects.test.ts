@@ -3,6 +3,7 @@ import {
   EnvironmentId,
   ProjectId,
   CommandId,
+  ProviderInstanceId,
   SourceControlDiscoveryResult,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
@@ -267,5 +268,20 @@ describe("add project shared logic", () => {
       createWorkspaceRootIfMissing: true,
       defaultModelSelection: null,
     });
+  });
+
+  it("adds the configured model selection to a new project", () => {
+    expect(
+      buildProjectCreateCommand({
+        commandId: CommandId.make("command"),
+        projectId: ProjectId.make("project"),
+        workspaceRoot: "/work/repo",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        defaultModelSelection: {
+          instanceId: ProviderInstanceId.make("claudeAgent"),
+          model: "claude-opus-4-6",
+        },
+      }).defaultModelSelection,
+    ).toEqual({ instanceId: "claudeAgent", model: "claude-opus-4-6" });
   });
 });

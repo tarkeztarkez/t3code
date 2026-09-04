@@ -738,6 +738,27 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("persists the default model for new projects", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const selection = createModelSelection(
+        ProviderInstanceId.make("claudeAgent"),
+        "claude-opus-4-6",
+      );
+
+      const settings = yield* serverSettings.updateSettings({
+        defaultProjectModelSelection: selection,
+      });
+
+      assert.deepStrictEqual(settings.defaultProjectModelSelection, selection);
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      // @effect-diagnostics-next-line preferSchemaOverJson:off
+      assert.deepStrictEqual(JSON.parse(raw).defaultProjectModelSelection, selection);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("keeps optional providers disabled after a new installation writes settings", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;

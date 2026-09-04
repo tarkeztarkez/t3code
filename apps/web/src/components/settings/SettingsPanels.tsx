@@ -75,6 +75,7 @@ import {
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
+  resolveDefaultProviderModelSelection,
   sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
@@ -470,6 +471,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const isDefaultProjectModelDirty = !Equal.equals(
+    settings.defaultProjectModelSelection,
+    DEFAULT_UNIFIED_SETTINGS.defaultProjectModelSelection,
+  );
   const isBackgroundActivityDirty = hasChangedBackgroundActivitySettings(settings);
 
   const changedSettingLabels = useMemo(
@@ -532,6 +537,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.addProjectBaseDirectory !== DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory
         ? ["Add project base directory"]
         : []),
+      ...(isDefaultProjectModelDirty ? ["New project model"] : []),
       ...(settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin
         ? ["Unpin confirmation"]
         : []),
@@ -552,6 +558,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ],
     [
       isTextGenerationModelDirty,
+      isDefaultProjectModelDirty,
       isBackgroundActivityDirty,
       settings.browserDefaultViewport,
       settings.browserDefaultZoomFactor,
@@ -678,6 +685,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
       newWorktreesStartFromOrigin: DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin,
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
+      defaultProjectModelSelection: DEFAULT_UNIFIED_SETTINGS.defaultProjectModelSelection,
       confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
@@ -1926,6 +1934,19 @@ export function GeneralSettingsPanel() {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const defaultProjectModelSelection = resolveDefaultProviderModelSelection(
+    serverProviders,
+    settings.defaultProjectModelSelection,
+  );
+  const defaultProjectModelInstanceEntry = textGenerationModelInstanceEntries.find(
+    (entry) => entry.instanceId === defaultProjectModelSelection?.instanceId,
+  );
+  const defaultProjectModelOptionsByInstance = getCustomModelOptionsByInstance(
+    settings,
+    serverProviders,
+    defaultProjectModelSelection?.instanceId ?? null,
+    defaultProjectModelSelection?.model ?? null,
+  );
   const resolvedBackgroundActivity = resolveServerBackgroundActivitySettings(settings);
   const activeBackgroundActivityProfile = resolvedBackgroundActivity.profile;
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
@@ -2325,6 +2346,62 @@ export function GeneralSettingsPanel() {
             }
           />
         ) : null}
+
+        <SettingsRow
+          {...searchableSetting("new-project-model")}
+          description="New projects use this model for their new threads. Existing projects keep their current setting."
+          resetAction={
+            settings.defaultProjectModelSelection !== null ? (
+              <SettingResetButton
+                label="new project model"
+                onClick={() => updateSettings({ defaultProjectModelSelection: null })}
+              />
+            ) : null
+          }
+          control={
+            defaultProjectModelSelection && defaultProjectModelInstanceEntry ? (
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <ProviderModelPicker
+                  activeInstanceId={defaultProjectModelSelection.instanceId}
+                  model={defaultProjectModelSelection.model}
+                  lockedProvider={null}
+                  instanceEntries={textGenerationModelInstanceEntries}
+                  modelOptionsByInstance={defaultProjectModelOptionsByInstance}
+                  triggerVariant="outline"
+                  triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                  onInstanceModelChange={(instanceId, model) =>
+                    updateSettings({
+                      defaultProjectModelSelection: createModelSelection(instanceId, model),
+                    })
+                  }
+                />
+                <TraitsPicker
+                  provider={defaultProjectModelInstanceEntry.driverKind}
+                  models={defaultProjectModelInstanceEntry.models}
+                  model={defaultProjectModelSelection.model}
+                  prompt=""
+                  onPromptChange={() => {}}
+                  modelOptions={defaultProjectModelSelection.options ?? []}
+                  allowPromptInjectedEffort={false}
+                  planModeEnabled={settings.planModeEnabled}
+                  triggerVariant="outline"
+                  triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                  onModelOptionsChange={(options) =>
+                    updateSettings({
+                      defaultProjectModelSelection: createModelSelection(
+                        defaultProjectModelSelection.instanceId,
+                        defaultProjectModelSelection.model,
+                        options,
+                      ),
+                    })
+                  }
+                />
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground">No providers available</span>
+            )
+          }
+        />
 
         <SettingsRow
           {...searchableSetting("add-project-starts-in")}
