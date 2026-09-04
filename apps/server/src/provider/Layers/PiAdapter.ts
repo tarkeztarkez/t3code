@@ -263,10 +263,104 @@ function stripBearerPrefix(authorizationHeader: string): string {
 }
 
 function appendStderrDetail(detail: string, stderr: string): string {
-  const trimmed = stderr.trim();
+  const trimmed = stripPiStartupTimings(stderr).trim();
   if (trimmed.length === 0) return detail;
   const separator = /[.!?]$/.test(detail.trim()) ? " stderr: " : ". stderr: ";
   return `${detail}${separator}${trimmed}`;
+}
+
+const PI_STARTUP_TIMING_HEADER = /^--- Startup Timings: (main|extensions) ---$/u;
+const PI_STARTUP_TIMING_ENTRY = /^\s{2}(.+): (\d+)ms$/u;
+
+type PiStartupTimingGroup = "main" | "extensions";
+
+interface ParsedPiStartupTimings {
+  readonly main: ReadonlyMap<string, number>;
+  readonly extensions: ReadonlyMap<string, number>;
+}
+
+function parsePiStartupTimings(stderr: string): ParsedPiStartupTimings {
+  const groups: Record<PiStartupTimingGroup, Map<string, number>> = {
+    main: new Map(),
+    extensions: new Map(),
+  };
+  let currentGroup: PiStartupTimingGroup | null = null;
+
+  for (const rawLine of stderr.split(/\r?\n/u)) {
+    const line = rawLine.trimEnd();
+    const header = PI_STARTUP_TIMING_HEADER.exec(line.trim());
+    if (header) {
+      currentGroup = header[1] as PiStartupTimingGroup;
+      continue;
+    }
+    if (currentGroup === null) continue;
+    if (/^-{3,}$/u.test(line.trim())) {
+      currentGroup = null;
+      continue;
+    }
+    const entry = PI_STARTUP_TIMING_ENTRY.exec(line);
+    if (entry) groups[currentGroup].set(entry[1]!, Number(entry[2]));
+  }
+
+  return groups;
+}
+
+export function piStartupTimingAttributes(
+  stderr: string,
+  observedMs: number,
+): Record<string, string | number> {
+  const timings = parsePiStartupTimings(stderr);
+  const attributes: Record<string, string | number> = {
+    "pi.startup.observed_ms": observedMs,
+  };
+  for (const [label, durationMs] of timings.main) {
+    const key = label
+      .replace(/([a-z\d])([A-Z])/gu, "$1_$2")
+      .replace(/[^a-z\d]+/giu, "_")
+      .toLowerCase();
+    attributes[`pi.startup.main.${key}_ms`] = durationMs;
+  }
+
+  const extensionEntries = [...timings.extensions].filter(([label]) => label !== "TOTAL");
+  const moduleImportMs = extensionEntries
+    .filter(([label]) => label.endsWith(" module import"))
+    .reduce((total, [, durationMs]) => total + durationMs, 0);
+  const factoryMs = extensionEntries
+    .filter(([label]) => label.endsWith(" factory"))
+    .reduce((total, [, durationMs]) => total + durationMs, 0);
+  const slowest = extensionEntries.reduce<readonly [string, number] | null>(
+    (current, entry) => (current === null || entry[1] > current[1] ? entry : current),
+    null,
+  );
+  const extensionsTotalMs = timings.extensions.get("TOTAL");
+  if (extensionsTotalMs !== undefined) {
+    attributes["pi.startup.extensions.total_ms"] = extensionsTotalMs;
+    attributes["pi.startup.extensions.module_import_ms"] = moduleImportMs;
+    attributes["pi.startup.extensions.factory_ms"] = factoryMs;
+    attributes["pi.startup.extensions.count"] = extensionEntries.filter(([label]) =>
+      label.endsWith(" module import"),
+    ).length;
+  }
+  if (slowest) {
+    const [label, durationMs] = slowest;
+    const extensionPath = label.replace(/ (?:module import|factory)$/u, "");
+    attributes["pi.startup.extensions.slowest"] =
+      extensionPath.split(/[\\/]/u).at(-1) ?? extensionPath;
+    attributes["pi.startup.extensions.slowest_ms"] = durationMs;
+  }
+
+  const mainTotalMs = timings.main.get("TOTAL");
+  if (mainTotalMs !== undefined) {
+    attributes["pi.startup.before_instrumentation_ms"] = Math.max(0, observedMs - mainTotalMs);
+  }
+  return attributes;
+}
+
+export function stripPiStartupTimings(stderr: string): string {
+  return stderr
+    .replace(/\n?--- Startup Timings: (?:main|extensions) ---[\s\S]*?\n-+\n?/gu, "\n")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
 }
 
 function encodeJsonString(value: unknown): string {
@@ -1338,6 +1432,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
         };
         const startAttempt = (sessionScope: Scope.Closeable, bridgeEnabled: boolean) =>
           Effect.gen(function* () {
+            const startupStartedAt = yield* Clock.currentTimeMillis;
             if (bridgeEnabled && mcpBridge._tag === "Ready") {
               yield* Scope.addFinalizer(sessionScope, makeBridgeCleanup(mcpBridge));
             }
@@ -1353,6 +1448,12 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
                     detail: "Pi returned malformed state data.",
                   });
                 }
+                yield* Effect.yieldNow;
+                const startupStderr = yield* rpc.stderr;
+                const startupFinishedAt = yield* Clock.currentTimeMillis;
+                yield* Effect.annotateCurrentSpan(
+                  piStartupTimingAttributes(startupStderr, startupFinishedAt - startupStartedAt),
+                );
                 return {
                   sessionScope,
                   rpc,

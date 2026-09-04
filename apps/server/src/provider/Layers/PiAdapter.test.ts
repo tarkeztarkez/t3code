@@ -40,7 +40,49 @@ import {
   makePiAdapter,
   normalizeNotebookToolSummary,
   notebookToolSummaryPrompt,
+  piStartupTimingAttributes,
+  stripPiStartupTimings,
 } from "./PiAdapter.ts";
+
+const PI_STARTUP_TIMING_FIXTURE = `
+--- Startup Timings: main ---
+  parseArgs: 10ms
+  createAgentSessionRuntime: 168ms
+  TOTAL: 188ms
+-----------------------------
+
+--- Startup Timings: extensions ---
+  /tmp/t3-pi/claude-compat.ts module import: 51ms
+  /tmp/t3-pi/claude-compat.ts factory: 1ms
+  /tmp/t3-pi/pi-subagents.ts module import: 9ms
+  /tmp/t3-pi/pi-subagents.ts factory: 2ms
+  <inline:llama.cpp> factory: 1ms
+  TOTAL: 64ms
+-----------------------------------
+`;
+
+it("converts Pi startup timings into bounded trace attributes", () => {
+  NodeAssert.deepEqual(piStartupTimingAttributes(PI_STARTUP_TIMING_FIXTURE, 3_264), {
+    "pi.startup.observed_ms": 3_264,
+    "pi.startup.main.parse_args_ms": 10,
+    "pi.startup.main.create_agent_session_runtime_ms": 168,
+    "pi.startup.main.total_ms": 188,
+    "pi.startup.extensions.total_ms": 64,
+    "pi.startup.extensions.module_import_ms": 60,
+    "pi.startup.extensions.factory_ms": 4,
+    "pi.startup.extensions.count": 2,
+    "pi.startup.extensions.slowest": "claude-compat.ts",
+    "pi.startup.extensions.slowest_ms": 51,
+    "pi.startup.before_instrumentation_ms": 3_076,
+  });
+});
+
+it("removes Pi startup timings without hiding real stderr", () => {
+  NodeAssert.equal(
+    stripPiStartupTimings(`before warning\n${PI_STARTUP_TIMING_FIXTURE}\nafter warning\n`),
+    "before warning\n\nafter warning",
+  );
+});
 
 class PiAdapter extends Context.Service<PiAdapter, PiAdapterShape>()(
   "t3/provider/Layers/PiAdapter.test/PiAdapter",

@@ -500,6 +500,7 @@ export const spawnPiRpcSession = (
     ];
     const environment = {
       ...input.environment,
+      PI_TIMING: "1",
       [PI_RUNTIME_MODE_ENV]: input.runtimeMode,
     };
     const spawnCommand = yield* resolveSpawnCommand(input.binaryPath, args, {

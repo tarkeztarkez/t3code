@@ -56,6 +56,7 @@ function spawnWithFakeProcess<A, E, R>(
     readonly stdout: Queue.Queue<Uint8Array>;
     readonly exitDeferred: Deferred.Deferred<number>;
     readonly spawnedArgs: ReadonlyArray<ReadonlyArray<string>>;
+    readonly spawnedEnvironments: ReadonlyArray<NodeJS.ProcessEnv | undefined>;
   }) => Effect.Effect<A, E, R>,
 ) {
   return Effect.scoped(
@@ -63,16 +64,21 @@ function spawnWithFakeProcess<A, E, R>(
       const stdout = yield* Queue.unbounded<Uint8Array>();
       const exitDeferred = yield* Deferred.make<number>();
       const spawnedArgs: Array<ReadonlyArray<string>> = [];
+      const spawnedEnvironments: Array<NodeJS.ProcessEnv | undefined> = [];
       const spawner = ChildProcessSpawner.make((command) =>
         Effect.sync(() => {
+          const commandWithEnvironment = command as unknown as {
+            readonly options: { readonly env?: NodeJS.ProcessEnv };
+          };
           spawnedArgs.push(commandArgs(command));
+          spawnedEnvironments.push(commandWithEnvironment.options.env);
           return makeHandle({
             stdout: Stream.fromQueue(stdout),
             exitCode: Deferred.await(exitDeferred),
           });
         }),
       );
-      return yield* effect({ stdout, exitDeferred, spawnedArgs }).pipe(
+      return yield* effect({ stdout, exitDeferred, spawnedArgs, spawnedEnvironments }).pipe(
         Effect.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
       );
     }),
@@ -141,6 +147,20 @@ describe("decodePiAvailableModelsResponseDataExit", () => {
 });
 
 describe("spawnPiRpcSession", () => {
+  it.effect("enables Pi's startup timing output", () =>
+    spawnWithFakeProcess(({ spawnedEnvironments }) =>
+      Effect.gen(function* () {
+        yield* spawnPiRpcSession({
+          binaryPath: "pi",
+          cwd: process.cwd(),
+          runtimeMode: "full-access",
+        });
+
+        expect(spawnedEnvironments[0]?.PI_TIMING).toBe("1");
+      }),
+    ),
+  );
+
   it.effect("passes explicit skill paths to Pi", () =>
     spawnWithFakeProcess(({ spawnedArgs }) =>
       Effect.gen(function* () {
