@@ -72,6 +72,7 @@ it("converts Pi startup timings into bounded trace attributes", () => {
     "pi.startup.extensions.factory_ms": 4,
     "pi.startup.extensions.count": 2,
     "pi.startup.extensions.slowest": "claude-compat.ts",
+    "pi.startup.extensions.slowest_path": "/tmp/t3-pi/claude-compat.ts",
     "pi.startup.extensions.slowest_ms": 51,
     "pi.startup.before_instrumentation_ms": 3_076,
   });

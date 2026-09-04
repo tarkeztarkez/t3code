@@ -346,6 +346,7 @@ export function piStartupTimingAttributes(
     const extensionPath = label.replace(/ (?:module import|factory)$/u, "");
     attributes["pi.startup.extensions.slowest"] =
       extensionPath.split(/[\\/]/u).at(-1) ?? extensionPath;
+    attributes["pi.startup.extensions.slowest_path"] = extensionPath;
     attributes["pi.startup.extensions.slowest_ms"] = durationMs;
   }
 
