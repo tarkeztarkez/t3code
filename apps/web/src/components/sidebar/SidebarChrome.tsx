@@ -89,6 +89,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       )}
       to="/"
     >
+      <VerestroMark />
       <T3Wordmark />
       <span
         className={cn(
@@ -99,6 +100,22 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
         Code
       </span>
     </Link>
+  );
+}
+
+function VerestroMark() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-auto shrink-0"
+      viewBox="0.246 0.234 42.687 48.998"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M23.794 32.398a53.43 53.43 0 0 0-.888 3.133c-.587 2.227-1.046 4.19-1.34 5.878-.182-1.117-.588-2.822-1.175-5.108-.588-2.287-1.176-4.162-1.71-5.614L8.475.234H.246l17.082 48.998h8.441l5.878-16.834h-7.853ZM34.621.234l-8.94 26.544h7.959L42.933.235H34.62Z"
+        fill="#fff"
+      />
+    </svg>
   );
 }
 
