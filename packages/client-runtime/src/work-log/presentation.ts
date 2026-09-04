@@ -2,6 +2,7 @@ import { isToolLifecycleItemType, type ToolLifecycleItemType } from "@t3tools/co
 
 export interface WorkLogPresentationEntry {
   readonly label: string;
+  readonly detail?: string;
   readonly toolTitle?: string;
   readonly tone: "thinking" | "tool" | "info" | "error";
   readonly command?: string;
@@ -42,10 +43,15 @@ function workLogEntryIsToolLike(entry: WorkLogPresentationEntry): boolean {
   return entry.itemType !== undefined && isToolLifecycleItemType(entry.itemType);
 }
 
-export function runningToolFallbackLabel(entry: WorkLogPresentationEntry): string | null {
-  return entry.toolLifecycleStatus === "inProgress" && workLogEntryIsToolLike(entry)
-    ? "Running tool"
-    : null;
+export function toolLifecycleFallbackLabel(entry: WorkLogPresentationEntry): string | null {
+  if (!workLogEntryIsToolLike(entry)) return null;
+  if (
+    entry.toolLifecycleStatus === "inProgress" ||
+    /\bstill running\b/iu.test(entry.detail ?? "")
+  ) {
+    return "Running tool";
+  }
+  return null;
 }
 
 export function workLogEntryIsLocalCodeSearch(entry: WorkLogPresentationEntry): boolean {

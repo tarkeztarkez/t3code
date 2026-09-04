@@ -9,7 +9,7 @@ import {
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { CodexArtifactTemplate } from "@t3tools/client-runtime/codex-artifact-templates";
 import { commandProgramName } from "@t3tools/client-runtime/work-log/command-label";
-import { runningToolFallbackLabel } from "@t3tools/client-runtime/work-log/presentation";
+import { toolLifecycleFallbackLabel } from "@t3tools/client-runtime/work-log/presentation";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,
@@ -2214,7 +2214,7 @@ function liveWorkEntryLabel(
     return "Running command";
   }
 
-  const fallbackLabel = runningToolFallbackLabel(workEntry);
+  const fallbackLabel = toolLifecycleFallbackLabel(workEntry);
   if (fallbackLabel) return fallbackLabel;
 
   return workEntryPreview(workEntry, workspaceRoot) ?? toolWorkEntryHeading(workEntry);
@@ -2426,7 +2426,7 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
     showWarningIndicator || showFailedIndicator ? "circle-alert" : workEntryIconName(workEntry);
   const displayText =
     notebookWorkEntryLabel(workEntry) ??
-    runningToolFallbackLabel(workEntry) ??
+    toolLifecycleFallbackLabel(workEntry) ??
     workEntryPreview(workEntry, workspaceRoot) ??
     toolWorkEntryHeading(workEntry);
   const expandedBody = buildToolCallExpandedBody(workEntry, workspaceRoot);

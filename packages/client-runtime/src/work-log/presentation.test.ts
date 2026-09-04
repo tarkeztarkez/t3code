@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { runningToolFallbackLabel } from "./presentation.js";
+import { toolLifecycleFallbackLabel } from "./presentation.js";
 
-describe("runningToolFallbackLabel", () => {
+describe("toolLifecycleFallbackLabel", () => {
   it("hides partial tool output until the call finishes", () => {
     expect(
-      runningToolFallbackLabel({
+      toolLifecycleFallbackLabel({
         label: "Script completedNotebook memory: heap 88 MiB",
         tone: "tool",
         itemType: "dynamic_tool_call",
@@ -13,9 +13,21 @@ describe("runningToolFallbackLabel", () => {
     ).toBe("Running tool");
   });
 
+  it("keeps yielded commands marked as running", () => {
+    expect(
+      toolLifecycleFallbackLabel({
+        label: "wait",
+        detail: 'Still running (exec cell "notebook-159").',
+        tone: "tool",
+        itemType: "dynamic_tool_call",
+        toolLifecycleStatus: "completed",
+      }),
+    ).toBe("Running tool");
+  });
+
   it("does not replace completed tool labels", () => {
     expect(
-      runningToolFallbackLabel({
+      toolLifecycleFallbackLabel({
         label: "Fetched site data",
         tone: "tool",
         itemType: "dynamic_tool_call",

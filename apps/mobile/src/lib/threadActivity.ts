@@ -16,7 +16,7 @@ import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import {
   normalizeCompactToolLabel,
   omitSupersededLifecycleMarkers,
-  runningToolFallbackLabel,
+  toolLifecycleFallbackLabel,
   summarizeToolGroup,
   toolGroupSummaryKind,
   type ToolGroupSummaryKind,
@@ -837,7 +837,7 @@ function capitalizePhrase(value: string): string {
 function workEntryHeading(workEntry: WorkLogEntry): string {
   const notebookLabel = notebookWorkEntryLabel(workEntry);
   if (notebookLabel) return notebookLabel;
-  const fallbackLabel = runningToolFallbackLabel(workEntry);
+  const fallbackLabel = toolLifecycleFallbackLabel(workEntry);
   if (fallbackLabel) return fallbackLabel;
   if (!workEntry.toolTitle) {
     return capitalizePhrase(normalizeCompactToolLabel(workEntry.label));
@@ -1597,7 +1597,7 @@ function liveToolActivitySummary(activity: ThreadFeedActivity): string {
     const program = commandProgramName(command);
     return program ? `Running ${program}` : "Running command";
   }
-  const fallbackLabel = runningToolFallbackLabel(activity.workEntry);
+  const fallbackLabel = toolLifecycleFallbackLabel(activity.workEntry);
   if (fallbackLabel) return fallbackLabel;
   return activity.detail ?? activity.summary;
 }
