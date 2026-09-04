@@ -29,6 +29,11 @@ the provider has an explicit external binary path. Bundled Pi sets `PI_CODING_AG
 `<stateDir>/pi`, so it does not read the user's standalone `~/.pi/agent` configuration. T3 stores
 Pi auth, settings, sessions, subagent state, and user extensions under that directory.
 
+Pi activity labels use a separate Luna request. Summary failures reach the server logs with
+the model ID and provider error message; they do not interrupt the agent turn. Keep the Pi SDK
+external to the server bundle. Its OAuth loaders use computed relative imports that bundlers
+cannot relocate. Desktop and CLI runtime payloads must include the package and its dependencies.
+
 The server passes its approval, OpenAI Codex model additions, user-input, Claude compatibility, and
 subagent extensions to each Pi session. Codex Conversion and Pi MCP Adapter are pinned runtime
 dependencies rather than packages installed into Pi's global settings. The subagent extension sends

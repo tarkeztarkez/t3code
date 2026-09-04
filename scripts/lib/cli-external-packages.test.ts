@@ -41,6 +41,14 @@ describe("shouldBundleCliDependency", () => {
     assert.strictEqual(shouldBundleCliDependency("node:fs"), false);
   });
 
+  it("keeps Pi OAuth loaders beside their runtime modules", () => {
+    assert.strictEqual(shouldBundleCliDependency("@earendil-works/pi-coding-agent"), false);
+    assert.deepStrictEqual(
+      selectCliRuntimeExternalDependencies({ "@earendil-works/pi-coding-agent": "0.85.0" }),
+      { "@earendil-works/pi-coding-agent": "0.85.0" },
+    );
+  });
+
   it("leaves native addons and their dlopen wrappers external", () => {
     for (const id of [
       "node-pty",

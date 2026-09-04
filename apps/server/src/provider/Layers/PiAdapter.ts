@@ -265,7 +265,7 @@ export function normalizeNotebookToolSummary(value: string): string | null {
   return firstLine.length <= 72 ? firstLine : `${firstLine.slice(0, 71).trimEnd()}…`;
 }
 
-function makePiToolSummaryGenerator(
+export function makePiToolSummaryGenerator(
   environment: NodeJS.ProcessEnv | undefined,
 ): PiToolSummaryGenerator {
   let runtimePromise: Promise<ModelRuntime> | undefined;
@@ -289,7 +289,9 @@ function makePiToolSummaryGenerator(
     });
     const runtime = await runtimePromise;
     const model = runtime.getModel("openai-codex", PI_NOTEBOOK_SUMMARY_MODEL);
-    if (!model) return null;
+    if (!model) {
+      throw new Error(`Pi tool summary model not found: openai-codex/${PI_NOTEBOOK_SUMMARY_MODEL}`);
+    }
     const message = await runtime.completeSimple(
       model,
       {
@@ -308,12 +310,18 @@ function makePiToolSummaryGenerator(
         ...(providerEnvironment ? { env: providerEnvironment } : {}),
       },
     );
-    if (message.stopReason === "error" || message.stopReason === "aborted") return null;
+    if (message.stopReason === "error" || message.stopReason === "aborted") {
+      throw new Error(
+        `Pi tool summary failed for openai-codex/${PI_NOTEBOOK_SUMMARY_MODEL} (${message.stopReason}): ${message.errorMessage ?? "No error details returned"}`,
+      );
+    }
     const text = message.content
       .filter((part) => part.type === "text")
       .map((part) => part.text)
       .join("");
-    return normalizeNotebookToolSummary(text);
+    const summary = normalizeNotebookToolSummary(text);
+    if (!summary) throw new Error("Pi tool summary returned no text");
+    return summary;
   };
 }
 

@@ -66,6 +66,9 @@ export const CLI_BUILD_ONLY_EXTERNAL_PREFIXES = [
 export const CLI_EXTERNAL_PACKAGE_PREFIXES = [
   ...CLI_RUNTIME_EXTERNAL_PREFIXES,
   ...CLI_BUILD_ONLY_EXTERNAL_PREFIXES,
+  // Pi's OAuth loaders use computed relative imports. Keep the SDK in its
+  // package directory; the runtime payload below already ships its full dependencies.
+  "@earendil-works/pi-coding-agent",
 ] as const;
 
 const CLI_RUNTIME_PAYLOAD_PACKAGES = [
