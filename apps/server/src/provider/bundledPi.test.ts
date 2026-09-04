@@ -11,6 +11,6 @@ it.effect("runs the Pi version shipped with T3 Code", () =>
     const result = yield* runPiCommand({ ...command, args: ["--version"] });
 
     assert.strictEqual(result.code, 0);
-    assert.strictEqual(result.stdout.trim(), "0.84.4");
+    assert.strictEqual(result.stdout.trim(), "0.85.0");
   }).pipe(Effect.provide(NodeServices.layer)),
 );
