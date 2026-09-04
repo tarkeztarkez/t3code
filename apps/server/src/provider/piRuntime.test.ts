@@ -25,6 +25,10 @@ import {
 
 const encoder = new TextEncoder();
 
+function commandArgs(command: unknown): ReadonlyArray<string> {
+  return (command as { readonly args: ReadonlyArray<string> }).args;
+}
+
 function makeHandle(input: {
   readonly stdout?: Stream.Stream<Uint8Array>;
   readonly stderr?: string;
@@ -51,21 +55,24 @@ function spawnWithFakeProcess<A, E, R>(
   effect: (input: {
     readonly stdout: Queue.Queue<Uint8Array>;
     readonly exitDeferred: Deferred.Deferred<number>;
+    readonly spawnedArgs: ReadonlyArray<ReadonlyArray<string>>;
   }) => Effect.Effect<A, E, R>,
 ) {
   return Effect.scoped(
     Effect.gen(function* () {
       const stdout = yield* Queue.unbounded<Uint8Array>();
       const exitDeferred = yield* Deferred.make<number>();
-      const spawner = ChildProcessSpawner.make(() =>
-        Effect.succeed(
-          makeHandle({
+      const spawnedArgs: Array<ReadonlyArray<string>> = [];
+      const spawner = ChildProcessSpawner.make((command) =>
+        Effect.sync(() => {
+          spawnedArgs.push(commandArgs(command));
+          return makeHandle({
             stdout: Stream.fromQueue(stdout),
             exitCode: Deferred.await(exitDeferred),
-          }),
-        ),
+          });
+        }),
       );
-      return yield* effect({ stdout, exitDeferred }).pipe(
+      return yield* effect({ stdout, exitDeferred, spawnedArgs }).pipe(
         Effect.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
       );
     }),
@@ -134,6 +141,22 @@ describe("decodePiAvailableModelsResponseDataExit", () => {
 });
 
 describe("spawnPiRpcSession", () => {
+  it.effect("passes an exact session id to Pi", () =>
+    spawnWithFakeProcess(({ spawnedArgs }) =>
+      Effect.gen(function* () {
+        yield* spawnPiRpcSession({
+          binaryPath: "pi",
+          cwd: process.cwd(),
+          runtimeMode: "full-access",
+          sessionId: "pi-session-before-restart",
+        });
+
+        expect(spawnedArgs[0]).toContain("--session");
+        expect(spawnedArgs[0]).toContain("pi-session-before-restart");
+      }),
+    ),
+  );
+
   it.effect("uses a non-empty fallback detail when Pi returns an empty error string", () =>
     spawnWithFakeProcess(({ stdout }) =>
       Effect.gen(function* () {

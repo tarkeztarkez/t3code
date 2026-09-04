@@ -263,6 +263,10 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const events = Array.from(yield* Fiber.join(eventsFiber));
       NodeAssert.equal(session.provider, "pi");
       NodeAssert.equal(session.threadId, threadId);
+      NodeAssert.deepEqual(session.resumeCursor, {
+        schemaVersion: 1,
+        sessionId: "pi-session-1",
+      });
       NodeAssert.equal(runtimeMock.state.spawnInputs[0]?.binaryPath, "fake-pi");
       NodeAssert.equal(runtimeMock.state.spawnInputs[0]?.mcpConfigPath, undefined);
       NodeAssert.equal(runtimeMock.state.spawnInputs[0]?.appendSystemPrompt, undefined);
@@ -272,6 +276,27 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
         ["session.started", "thread.started", "session.exited"],
       );
       NodeAssert.deepEqual(runtimeMock.state.closeCalls, [`T3 Code ${threadId}`]);
+    }),
+  );
+
+  it.effect("resumes the exact Pi session after the server loses its live process", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-resume");
+
+      const session = yield* adapter.startSession({
+        provider: ProviderDriverKind.make("pi"),
+        threadId,
+        runtimeMode: "approval-required",
+        resumeCursor: { schemaVersion: 1, sessionId: "pi-session-before-restart" },
+      });
+
+      NodeAssert.equal(runtimeMock.state.spawnInputs[0]?.sessionId, "pi-session-before-restart");
+      NodeAssert.deepEqual(session.resumeCursor, {
+        schemaVersion: 1,
+        sessionId: "pi-session-1",
+      });
+      yield* adapter.stopSession(threadId);
     }),
   );
 

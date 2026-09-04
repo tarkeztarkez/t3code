@@ -68,6 +68,7 @@ import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogg
 const PROVIDER = ProviderDriverKind.make("pi");
 const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 const PI_MCP_BRIDGE_TOKEN_ENV = "T3_MCP_BEARER_TOKEN";
+const PI_RESUME_CURSOR_VERSION = 1 as const;
 const PI_SUBAGENTS_FLEET_PREFIX = "T3_SUBAGENTS ";
 const PI_NOTEBOOK_SUMMARY_MODEL = "gpt-5.6-luna";
 const PI_NOTEBOOK_SUMMARY_MAX_CODE_CHARS = 20_000;
@@ -92,6 +93,18 @@ const PiSubagentFleet = Schema.Array(
   }),
 );
 const decodePiSubagentFleetExit = Schema.decodeUnknownExit(Schema.fromJsonString(PiSubagentFleet));
+const PiResumeCursor = Schema.Struct({
+  schemaVersion: Schema.Literal(PI_RESUME_CURSOR_VERSION),
+  sessionId: Schema.String,
+});
+const decodePiResumeCursorExit = Schema.decodeUnknownExit(PiResumeCursor);
+
+function parsePiResumeCursor(raw: unknown): { readonly sessionId: string } | undefined {
+  const decoded = decodePiResumeCursorExit(raw);
+  if (Exit.isFailure(decoded)) return undefined;
+  const sessionId = decoded.value.sessionId.trim();
+  return sessionId.length > 0 ? { sessionId } : undefined;
+}
 
 const PI_T3_BROWSER_SYSTEM_PROMPT = `
 ## T3 Code collaborative browser
@@ -1215,6 +1228,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
     const startSession: PiAdapterShape["startSession"] = Effect.fn("startSession")(
       function* (input) {
         const directory = input.cwd ?? serverConfig.cwd;
+        const resumeSessionId = parsePiResumeCursor(input.resumeCursor)?.sessionId;
         const existing = sessions.get(input.threadId);
         if (existing) {
           yield* stopPiContext(existing);
@@ -1261,6 +1275,7 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
             ...(spawnEnvironment ? { environment: spawnEnvironment } : {}),
             runtimeMode: input.runtimeMode,
             noExtensions: true,
+            ...(resumeSessionId ? { sessionId: resumeSessionId } : {}),
             sessionName: `T3 Code ${input.threadId}`,
             ...(input.modelSelection ? { modelSlug: input.modelSelection.model } : {}),
             ...(thinkingLevel ? { thinkingLevel } : {}),
@@ -1369,6 +1384,14 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
           cwd: directory,
           ...(input.modelSelection ? { model: input.modelSelection.model } : {}),
           threadId: input.threadId,
+          ...(started.piSessionId
+            ? {
+                resumeCursor: {
+                  schemaVersion: PI_RESUME_CURSOR_VERSION,
+                  sessionId: started.piSessionId,
+                },
+              }
+            : {}),
           createdAt,
           updatedAt: createdAt,
         };

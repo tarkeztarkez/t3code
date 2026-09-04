@@ -442,6 +442,7 @@ export interface SpawnPiRpcInput {
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv;
   readonly runtimeMode: RuntimeMode;
+  readonly sessionId?: string;
   readonly sessionName?: string;
   readonly modelSlug?: string;
   readonly thinkingLevel?: string;
@@ -472,6 +473,7 @@ export const spawnPiRpcSession = (
       ...(input.noExtensions ? ["--no-extensions"] : []),
       ...(input.noSession ? ["--no-session"] : []),
       ...(input.noTools ? ["--no-tools"] : []),
+      ...(input.sessionId ? ["--session", input.sessionId] : []),
       ...(input.mcpConfigPath ? ["--mcp-config", input.mcpConfigPath] : []),
       ...(input.appendSystemPrompt ? ["--append-system-prompt", input.appendSystemPrompt] : []),
       ...(input.sessionName ? ["--name", input.sessionName] : []),
