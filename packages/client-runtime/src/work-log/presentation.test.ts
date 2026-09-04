@@ -13,16 +13,17 @@ describe("toolLifecycleFallbackLabel", () => {
     ).toBe("Running tool");
   });
 
-  it("keeps yielded commands marked as running", () => {
+  it("labels yielded wait calls as waiting for the command", () => {
     expect(
       toolLifecycleFallbackLabel({
         label: "wait",
+        toolTitle: "wait",
         detail: 'Still running (exec cell "notebook-159").',
         tone: "tool",
         itemType: "dynamic_tool_call",
         toolLifecycleStatus: "completed",
       }),
-    ).toBe("Running tool");
+    ).toBe("Waiting for command");
   });
 
   it("does not replace completed tool labels", () => {

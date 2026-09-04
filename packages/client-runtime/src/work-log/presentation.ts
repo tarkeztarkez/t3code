@@ -46,6 +46,12 @@ function workLogEntryIsToolLike(entry: WorkLogPresentationEntry): boolean {
 export function toolLifecycleFallbackLabel(entry: WorkLogPresentationEntry): string | null {
   if (!workLogEntryIsToolLike(entry)) return null;
   if (
+    entry.toolTitle?.toLowerCase() === "wait" &&
+    (entry.toolLifecycleStatus === "inProgress" || /\bstill running\b/iu.test(entry.detail ?? ""))
+  ) {
+    return "Waiting for command";
+  }
+  if (
     entry.toolLifecycleStatus === "inProgress" ||
     /\bstill running\b/iu.test(entry.detail ?? "")
   ) {
