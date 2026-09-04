@@ -789,6 +789,44 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
     }),
   );
 
+  it.effect("reports completed context compactions", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-compaction");
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(6),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* startPiSession(adapter, threadId);
+      yield* adapter.sendTurn({ threadId, input: "Do the work" });
+      const handle = runtimeMock.state.handles[0];
+      if (!handle) throw new Error("missing fake Pi handle");
+
+      yield* Queue.offer(handle.eventsQueue, { type: "compaction_start" });
+      yield* Queue.offer(handle.eventsQueue, { type: "compaction_end" });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepEqual(
+        events.map((event) => event.type),
+        [
+          "session.started",
+          "thread.started",
+          "turn.started",
+          "item.started",
+          "item.completed",
+          "thread.state.changed",
+        ],
+      );
+      const compacted = events.at(-1);
+      NodeAssert.equal(compacted?.type, "thread.state.changed");
+      if (compacted?.type === "thread.state.changed") {
+        NodeAssert.equal(compacted.payload.state, "compacted");
+      }
+    }),
+  );
+
   it.effect("reports the error returned by Pi", () =>
     Effect.gen(function* () {
       const adapter = yield* PiAdapter;

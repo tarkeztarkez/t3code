@@ -1173,6 +1173,13 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
               title: "Compacting context",
             },
           });
+          if (event.aborted !== true) {
+            yield* emit({
+              ...(yield* buildEventBase({ threadId, turnId, raw: event })),
+              type: "thread.state.changed",
+              payload: { state: "compacted" },
+            });
+          }
           break;
         }
 
