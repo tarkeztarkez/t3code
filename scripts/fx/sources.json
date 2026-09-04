@@ -1,0 +1,10 @@
+{
+  "fx": {
+    "repository": "https://github.com/vercel-labs/fx.git",
+    "commit": "797359cc3298395317d1ca9a9c217688a29889ea"
+  },
+  "quickjs": {
+    "repository": "https://github.com/quickjs-ng/quickjs.git",
+    "commit": "df836d1f4490dfc6a65dbceda8a71d14ddc7f45c"
+  }
+}

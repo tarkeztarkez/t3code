@@ -1,0 +1,114 @@
+diff --git a/build.zig b/build.zig
+index 68900d5..3a1051f 100644
+--- a/build.zig
++++ b/build.zig
+@@ -79,6 +79,7 @@ pub fn build(b: *std.Build) void {
+
+     const exe_tests = b.addTest(.{
+         .root_module = exe.root_module,
++        .filters = if (b.option([]const u8, "test-filter", "Run matching tests only")) |filter| &.{filter} else &.{},
+     });
+     const run_exe_tests = b.addRunArtifact(exe_tests);
+     run_exe_tests.step.dependOn(b.getInstallStep());
+diff --git a/src/acp/server.zig b/src/acp/server.zig
+index aef731e..8266d01 100644
+--- a/src/acp/server.zig
++++ b/src/acp/server.zig
+@@ -1734,7 +1734,7 @@ fn handleInitialize(state: *ServerState, alloc: Allocator, msg: *jsonrpc.Message
+     var request = parseInitializeRequest(
+         alloc,
+         msg.params_raw,
+-        state.cfg.minimal_kernel,
++        state.cfg.minimal_kernel or state.cfg.allow_host_tools,
+     ) catch {
+         return state.writer.writeError(alloc, msg.id, .{
+             .code = ErrorCode.invalid_params,
+diff --git a/src/core/agent/runtime/orchestrator.zig b/src/core/agent/runtime/orchestrator.zig
+index 7b7afa9..f4fa901 100644
+--- a/src/core/agent/runtime/orchestrator.zig
++++ b/src/core/agent/runtime/orchestrator.zig
+@@ -5622,6 +5622,7 @@ fn processQueuedPromptLoop(
+                 }
+             }
+             const request_data = agent_stream_provider.RequestData{
++                .session_id = lifecycle.scope.session_id,
+                 .model = gateway_model,
+                 .instructions = gateway_instructions.items,
+                 .messages = request_messages,
+diff --git a/src/core/agent/stream_provider.zig b/src/core/agent/stream_provider.zig
+index d5b61c5..6f22240 100644
+--- a/src/core/agent/stream_provider.zig
++++ b/src/core/agent/stream_provider.zig
+@@ -161,6 +161,7 @@ test "host-managed credential lease exposes no secret or account metadata" {
+ /// Pure provider input used by request serializers and permission reviewers.
+ /// Every slice and JSON value is borrowed for the call.
+ pub const RequestData = struct {
++    session_id: ?[]const u8 = null,
+     model: []const u8,
+     instructions: []const types.ChatMessage = &.{},
+     messages: []const types.ChatMessage,
+@@ -237,6 +238,7 @@ pub const ModelRequest = struct {
+
+     pub fn data(self: ModelRequest) RequestData {
+         return .{
++            .session_id = self.session_id,
+             .model = self.model,
+             .instructions = self.instructions,
+             .messages = self.messages,
+diff --git a/src/core/cli/acp_runner.zig b/src/core/cli/acp_runner.zig
+index 3949ab4..2e9912e 100644
+--- a/src/core/cli/acp_runner.zig
++++ b/src/core/cli/acp_runner.zig
+@@ -43,6 +43,7 @@ pub const Config = struct {
+     saved_directories_suppressed: bool = false,
+     allow_acp_mcp: bool = true,
+     allow_native_tools: bool = true,
++    allow_host_tools: bool = false,
+     minimal_kernel: bool = false,
+ };
+
+diff --git a/src/gateway/openai_codex.zig b/src/gateway/openai_codex.zig
+index e048e95..77baa34 100644
+--- a/src/gateway/openai_codex.zig
++++ b/src/gateway/openai_codex.zig
+@@ -70,6 +70,10 @@ pub fn buildRequest(
+     const writer = &out.writer;
+     try writer.writeAll("{\"model\":");
+     try std.json.Stringify.value(request.model, .{}, writer);
++    if (request.session_id) |session_id| if (session_id.len > 0) {
++        try writer.writeAll(",\"prompt_cache_key\":");
++        try std.json.Stringify.value(session_id, .{}, writer);
++    };
+     try writer.writeAll(",\"store\":false,\"stream\":true,\"instructions\":");
+     try std.json.Stringify.value(instructions.written(), .{}, writer);
+     try writer.writeAll(",\"input\":[");
+@@ -568,10 +572,12 @@ test "OpenAI Codex request uses Responses input and converts AI SDK tool schemas
+         .tools = .{ .additional_functions = &.{read_file_schema} },
+         .tool_choice = .auto,
+         .provider_options = .{ .reasoning = types.ReasoningEffort.literal("high"), .fast = true },
++        .session_id = "stable-thread-id",
+     });
+     defer std.testing.allocator.free(body);
+
+     try std.testing.expect(std.mem.find(u8, body, "\"model\":\"gpt-5.4\"") != null);
++    try std.testing.expect(std.mem.find(u8, body, "\"prompt_cache_key\":\"stable-thread-id\"") != null);
+     try std.testing.expect(std.mem.find(u8, body, "\"instructions\":\"Be concise.\"") != null);
+     try std.testing.expect(std.mem.find(u8, body, "\"type\":\"function_call_output\"") != null);
+     try std.testing.expect(std.mem.find(u8, body, "\"encrypted_content\":\"opaque\"") != null);
+diff --git a/src/main.zig b/src/main.zig
+index 12feec1..afd8ec4 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -3788,7 +3788,11 @@ fn emptyEntryConfig(auth_mode: credentials.AuthMode) app_entry_runtime.Config {
+ }
+
+ fn runAcpServer(_: ?*anyopaque, alloc: Allocator, cfg: acp_runner.Config) anyerror!void {
+-    return acp_server.run(alloc, cfg);
++    var embedded = cfg;
++    embedded.allow_host_tools = true;
++    embedded.allow_native_tools = false;
++    embedded.allow_acp_mcp = false;
++    return acp_server.run(alloc, embedded);
+ }
+
+ fn handleSigWinchNative(_: std.posix.SIG) callconv(.c) void {
