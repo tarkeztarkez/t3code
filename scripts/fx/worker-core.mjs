@@ -1,5 +1,5 @@
-// Shared protocol for the two disposable execution workers. Only trusted fixtures
-// may run here until the production host has an OS-level sandbox.
+// Shared protocol for disposable execution workers. The isolated native host
+// supplies only the two callbacks; Bun and the stock qjs CLI are fixture-only.
 export function createWorker(send, finish) {
   let sequence = 0;
   let started = false;

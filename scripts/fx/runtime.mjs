@@ -9,7 +9,7 @@ const asciiJson = (value) =>
   );
 
 // A single execution owns its process and its abort signal. There is no notebook
-// state and no idle process per agent. This is a benchmark host, not a sandbox.
+// state and no idle process per agent. Only quickjs-isolated omits OS bindings.
 export function executeCode({
   engine,
   executable,
@@ -19,12 +19,17 @@ export function executeCode({
   timeoutMs = 10_000,
   onReady,
 }) {
-  if (!["bun", "quickjs"].includes(engine)) throw new Error("Unknown engine");
+  if (!["bun", "quickjs", "quickjs-isolated"].includes(engine)) throw new Error("Unknown engine");
   if (typeof code !== "string" || Buffer.byteLength(code) > 64 * 1024)
     throw new Error("Code exceeds 64 KiB");
   signal?.throwIfAborted();
   const started = performance.now();
-  const worker = NodeURL.fileURLToPath(new URL(`./${engine}-worker.mjs`, import.meta.url));
+  const worker = NodeURL.fileURLToPath(
+    new URL(
+      engine === "quickjs-isolated" ? "./worker-core.mjs" : `./${engine}-worker.mjs`,
+      import.meta.url,
+    ),
+  );
   const args =
     engine === "quickjs" ? ["--memory-limit", "32768", "--stack-size", "1024", worker] : [worker];
   return new Promise((resolve, reject) => {

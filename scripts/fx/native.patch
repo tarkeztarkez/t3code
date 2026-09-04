@@ -10,8 +10,59 @@ index 68900d5..3a1051f 100644
      });
      const run_exe_tests = b.addRunArtifact(exe_tests);
      run_exe_tests.step.dependOn(b.getInstallStep());
+diff --git a/src/acp/prompt.zig b/src/acp/prompt.zig
+index 69204d9..ecea68a 100644
+--- a/src/acp/prompt.zig
++++ b/src/acp/prompt.zig
+@@ -964,17 +964,17 @@ fn buildAgentConfig(
+     current_prompt_is_external: bool,
+ ) agent_runtime.Config {
+     return .{
+-        .system_prompt = state.cfg.prompt_policy.system_prompt,
++        .system_prompt = if (state.cfg.allow_host_tools) "" else state.cfg.prompt_policy.system_prompt,
+         .host_instructions = sections.host_instructions,
+-        .model_prompt_overlay = state.cfg.prompt_policy.modelPromptOverlay(session.model),
+-        .skill_catalog = sections.skill_catalog,
++        .model_prompt_overlay = if (state.cfg.allow_host_tools) null else state.cfg.prompt_policy.modelPromptOverlay(session.model),
++        .skill_catalog = if (state.cfg.allow_host_tools) .{ .skills = &.{} } else sections.skill_catalog,
+         .gateway_retry_count = state.cfg.gateway_retry_count,
+         .gateway_chat_url = state.cfg.gateway_chat_url,
+         .advertised_tool_names = sections.advertised_tool_names,
+         .advertised_functions = sections.advertised_functions,
+         .initial_dynamic_tools = state.host_tools.dynamic_tools,
+         .provider_capabilities = state.cfg.provider_set.select(session.provider).capabilities,
+-        .custom_tool_guidance = sections.custom_tool_guidance,
++        .custom_tool_guidance = if (state.cfg.allow_host_tools) "" else sections.custom_tool_guidance,
+         .agent_step_limit = session.agent_step_limit,
+         .max_tool_result_bytes = session.max_tool_result_bytes,
+         .cancel_flag = &session.cancel_flag,
+@@ -1000,7 +1000,7 @@ fn buildAgentConfig(
+                 current_prompt_is_external
+         else
+             false,
+-        .enforce_response_language = !state.cfg.minimal_kernel,
++        .enforce_response_language = !(state.cfg.minimal_kernel or state.cfg.allow_host_tools),
+         .context_limits = state.context_limits,
+     };
+ }
+@@ -1452,6 +1452,7 @@ fn finalizeTurn(raw_ctx: *anyopaque, turn_id: u64, outcome: types.TurnPresentati
+
+ fn appendRuntimeContext(raw_ctx: *anyopaque, arena: Allocator, messages: *std.ArrayList(ChatMessage)) !void {
+     const ctx: *AcpContext = @ptrCast(@alignCast(raw_ctx));
++    if (ctx.state.cfg.allow_host_tools) return;
+     const session = if (ctx.state.active_session) |*active| active else unreachable;
+     try ctx.state.cfg.context_registry.appendDefaultTransient(.{
+         .workspace_root = ctx.state.workspace_root,
+@@ -1464,6 +1465,7 @@ fn appendRuntimeContext(raw_ctx: *anyopaque, arena: Allocator, messages: *std.Ar
+
+ fn appendStaticContext(raw_ctx: *anyopaque, arena: Allocator, messages: *std.ArrayList(ChatMessage)) !void {
+     const ctx: *AcpContext = @ptrCast(@alignCast(raw_ctx));
++    if (ctx.state.cfg.allow_host_tools) return;
+     try ctx.state.cfg.context_registry.appendDefaultStatic(.{
+         .project_context = ctx.modelVisibleProjectContext(),
+     }, arena, messages);
 diff --git a/src/acp/server.zig b/src/acp/server.zig
-index aef731e..8266d01 100644
+index aef731e..feed750 100644
 --- a/src/acp/server.zig
 +++ b/src/acp/server.zig
 @@ -1734,7 +1734,7 @@ fn handleInitialize(state: *ServerState, alloc: Allocator, msg: *jsonrpc.Message
@@ -23,6 +74,14 @@ index aef731e..8266d01 100644
      ) catch {
          return state.writer.writeError(alloc, msg.id, .{
              .code = ErrorCode.invalid_params,
+@@ -1914,6 +1914,7 @@ fn handleInitialize(state: *ServerState, alloc: Allocator, msg: *jsonrpc.Message
+     if (state.host_instructions.len > 0) alloc.free(state.host_instructions);
+     state.host_instructions = request.host_instructions;
+     request.host_instructions = &.{};
++    if (state.cfg.allow_host_tools) state.context_enabled = false;
+     debug_trace.logf("acp", "libfx host capabilities tools={d} instructions_bytes={d}", .{
+         state.host_tools.tools.len,
+         state.host_instructions.len,
 diff --git a/src/core/agent/runtime/orchestrator.zig b/src/core/agent/runtime/orchestrator.zig
 index 7b7afa9..f4fa901 100644
 --- a/src/core/agent/runtime/orchestrator.zig
@@ -68,21 +127,37 @@ index 3949ab4..2e9912e 100644
  };
 
 diff --git a/src/gateway/openai_codex.zig b/src/gateway/openai_codex.zig
-index e048e95..77baa34 100644
+index e048e95..dd15efd 100644
 --- a/src/gateway/openai_codex.zig
 +++ b/src/gateway/openai_codex.zig
-@@ -70,6 +70,10 @@ pub fn buildRequest(
+@@ -70,6 +70,12 @@ pub fn buildRequest(
      const writer = &out.writer;
      try writer.writeAll("{\"model\":");
      try std.json.Stringify.value(request.model, .{}, writer);
-+    if (request.session_id) |session_id| if (session_id.len > 0) {
++    const cache_key = io_mod.getenv("FX_T3_PROMPT_CACHE_KEY") orelse request.session_id;
++    if (cache_key) |session_id| if (session_id.len > 0) {
++        if (session_id.len > 64) return error.InvalidPromptCacheKey;
 +        try writer.writeAll(",\"prompt_cache_key\":");
 +        try std.json.Stringify.value(session_id, .{}, writer);
 +    };
      try writer.writeAll(",\"store\":false,\"stream\":true,\"instructions\":");
      try std.json.Stringify.value(instructions.written(), .{}, writer);
      try writer.writeAll(",\"input\":[");
-@@ -568,10 +572,12 @@ test "OpenAI Codex request uses Responses input and converts AI SDK tool schemas
+@@ -263,7 +269,12 @@ pub fn streamPrepared(
+     if (request.cancel_flag.load(.seq_cst)) return stream_provider.failResult(error.Cancelled);
+     var auth_headers = try requestAuthHeaders(alloc, request.credential);
+     defer auth_headers.deinit(alloc);
+-    const request_endpoint = if (io_mod.getenv(e2e_endpoint_env)) |override| endpoint: {
++    const proxy_endpoint: ?[]u8 = if (io_mod.getenv("FX_T3_CODEX_PROXY_URL")) |base| proxy: {
++        if (!gateway_client.isLoopbackHttpUrl(base)) return stream_provider.failResult(error.InvalidCodexProxy);
++        break :proxy try std.fmt.allocPrint(alloc, "{s}/responses", .{base});
++    } else null;
++    defer if (proxy_endpoint) |value| alloc.free(value);
++    const request_endpoint = proxy_endpoint orelse if (io_mod.getenv(e2e_endpoint_env)) |override| endpoint: {
+         if (!gateway_client.isLoopbackHttpUrl(override)) {
+             return stream_provider.failResult(error.InvalidE2EOpenAICodexEndpoint);
+         }
+@@ -568,10 +579,12 @@ test "OpenAI Codex request uses Responses input and converts AI SDK tool schemas
          .tools = .{ .additional_functions = &.{read_file_schema} },
          .tool_choice = .auto,
          .provider_options = .{ .reasoning = types.ReasoningEffort.literal("high"), .fast = true },
@@ -95,6 +170,24 @@ index e048e95..77baa34 100644
      try std.testing.expect(std.mem.find(u8, body, "\"instructions\":\"Be concise.\"") != null);
      try std.testing.expect(std.mem.find(u8, body, "\"type\":\"function_call_output\"") != null);
      try std.testing.expect(std.mem.find(u8, body, "\"encrypted_content\":\"opaque\"") != null);
+diff --git a/src/gateway/openai_codex_models.zig b/src/gateway/openai_codex_models.zig
+index 8eec6bf..7f88b02 100644
+--- a/src/gateway/openai_codex_models.zig
++++ b/src/gateway/openai_codex_models.zig
+@@ -218,7 +218,12 @@ const FetchOperation = struct {
+ };
+
+ fn modelsUrl(alloc: std.mem.Allocator, version: ?versions.Version) ![]u8 {
+-    const base = io_mod.getenv(e2e_models_endpoint_env) orelse default_models_endpoint;
++    const proxy_endpoint: ?[]u8 = if (io_mod.getenv("FX_T3_CODEX_PROXY_URL")) |proxy| endpoint: {
++        if (!gateway_client.isLoopbackHttpUrl(proxy)) return error.InvalidCodexProxy;
++        break :endpoint try std.fmt.allocPrint(alloc, "{s}/models", .{proxy});
++    } else null;
++    defer if (proxy_endpoint) |value| alloc.free(value);
++    const base = proxy_endpoint orelse io_mod.getenv(e2e_models_endpoint_env) orelse default_models_endpoint;
+     if (io_mod.getenv(e2e_models_endpoint_env) != null and !gateway_client.isLoopbackHttpUrl(base)) {
+         return error.InvalidE2ECodexModelsEndpoint;
+     }
 diff --git a/src/main.zig b/src/main.zig
 index 12feec1..afd8ec4 100644
 --- a/src/main.zig

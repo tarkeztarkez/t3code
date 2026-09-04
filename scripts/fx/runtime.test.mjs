@@ -14,10 +14,38 @@ afterEach(async () => {
 const engines = [["bun", process.execPath]];
 if (process.env.FX_QUICKJS_BINARY) engines.push(["quickjs", process.env.FX_QUICKJS_BINARY]);
 else console.warn("QuickJS cases omitted. Set FX_QUICKJS_BINARY for parity verification.");
+if (process.env.FX_ISOLATED_BINARY)
+  engines.push(["quickjs-isolated", process.env.FX_ISOLATED_BINARY]);
 
 for (const [engine, executable] of engines)
   describe(engine, () => {
     const run = (options) => executeCode({ engine, executable, ...options });
+    if (engine === "quickjs-isolated") {
+      test("has no OS bindings, module loader, or ambient host functions", async () => {
+        const result = await run({
+          code: `
+          text([typeof process, typeof Bun, typeof Deno, typeof std, typeof os, typeof print, typeof fetch]);
+          for (const name of ["qjs:std", "qjs:os", "node:fs", "file:///etc/passwd"]) {
+            try { await import(name); text("unexpected import"); } catch { text("blocked"); }
+          }
+          text(Function("return typeof process")());
+        `,
+        });
+        expect(result.output).toEqual([
+          Array(7).fill("undefined"),
+          "blocked",
+          "blocked",
+          "blocked",
+          "blocked",
+          "undefined",
+        ]);
+      });
+      test("enforces the guest memory limit", async () => {
+        await expect(
+          run({ code: "text(new ArrayBuffer(64 * 1024 * 1024).byteLength);" }),
+        ).rejects.toThrow();
+      });
+    }
     test("composes async tools, preserves Unicode, and reports tool errors", async () => {
       const result = await run({
         code: `

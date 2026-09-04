@@ -31,8 +31,15 @@ if (engine === "fx") {
   run("git", ["apply", NodeURL.fileURLToPath(new URL("./native.patch", import.meta.url))]);
   run("zig", ["build", "-Doptimize=ReleaseFast"]);
 } else {
+  const workerSource = NodeURL.fileURLToPath(
+    new URL("./code-worker.c", import.meta.url),
+  ).replaceAll("\\", "/");
+  await NodeFSP.appendFile(
+    NodePath.join(cwd, "CMakeLists.txt"),
+    `\nadd_executable(fx-code-worker ${JSON.stringify(workerSource)})\ntarget_link_libraries(fx-code-worker PRIVATE qjs)\n`,
+  );
   run("cmake", ["-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]);
-  run("cmake", ["--build", "build", "--target", "qjs_exe", "-j", "4"]);
+  run("cmake", ["--build", "build", "--target", "qjs_exe", "fx-code-worker", "-j", "4"]);
 }
 console.log(
   JSON.stringify({
