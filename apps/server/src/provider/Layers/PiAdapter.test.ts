@@ -42,6 +42,7 @@ import {
   notebookToolSummaryPrompt,
   piStartupTimingAttributes,
   stripPiStartupTimings,
+  type PiToolSummaryInput,
 } from "./PiAdapter.ts";
 
 const PI_STARTUP_TIMING_FIXTURE = `
@@ -103,6 +104,7 @@ const runtimeMock = {
   state: {
     spawnInputs: [] as Array<SpawnPiRpcInput>,
     runCommandInputs: [] as Array<Parameters<PiRuntimeShape["runCommand"]>[0]>,
+    toolSummaryInputs: [] as Array<PiToolSummaryInput>,
     handles: [] as Array<FakePiHandle>,
     requests: [] as Array<Record<string, unknown>>,
     notifications: [] as Array<Record<string, unknown>>,
@@ -132,6 +134,7 @@ const runtimeMock = {
   reset() {
     this.state.spawnInputs.length = 0;
     this.state.runCommandInputs.length = 0;
+    this.state.toolSummaryInputs.length = 0;
     this.state.handles.length = 0;
     this.state.requests.length = 0;
     this.state.notifications.length = 0;
@@ -260,7 +263,17 @@ const piAdapterTestSettings = decodePiSettings({
   binaryPath: "fake-pi",
 });
 
-const PiAdapterTestLayer = Layer.effect(PiAdapter, makePiAdapter(piAdapterTestSettings)).pipe(
+const PiAdapterTestLayer = Layer.effect(
+  PiAdapter,
+  makePiAdapter(piAdapterTestSettings, {
+    toolSummaryGenerator: async (input) => {
+      runtimeMock.state.toolSummaryInputs.push(input);
+      return input.toolName === "notebook"
+        ? "Inspected notebook state"
+        : "Inspected repository files";
+    },
+  }),
+).pipe(
   Layer.provideMerge(Layer.succeed(PiRuntime, PiRuntimeTestDouble)),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
   Layer.provideMerge(NodeServices.layer),
@@ -453,7 +466,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       yield* startPiSession(adapter, threadId);
 
       const extensionPaths = runtimeMock.state.spawnInputs[0]?.extensionPaths ?? [];
-      NodeAssert.equal(extensionPaths.length, 5);
+      NodeAssert.equal(extensionPaths.length, 6);
       NodeAssert.equal(extensionPaths.includes(userExtensionPath), true);
       NodeAssert.equal(
         extensionPaths.includes(path.join(serverConfig.stateDir, "pi", "extensions")),
@@ -461,7 +474,7 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       );
       NodeAssert.deepEqual(
         extensionPaths.map((extensionPath) => path.extname(extensionPath)),
-        [".ts", ".ts", ".ts", ".ts", ".ts"],
+        [".ts", ".ts", ".ts", ".ts", ".ts", ".ts"],
       );
     }),
   );
@@ -479,10 +492,10 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       const input = runtimeMock.state.spawnInputs[0];
       if (!input?.mcpConfigPath) throw new Error("missing MCP config path");
       NodeAssert.match(input.appendSystemPrompt ?? "", /preview_status/);
-      NodeAssert.equal(input.extensionPaths?.length, 4);
+      NodeAssert.equal(input.extensionPaths?.length, 5);
       NodeAssert.deepEqual(
         input.extensionPaths?.map((extensionPath) => path.extname(extensionPath)),
-        [".ts", ".ts", ".ts", ".ts"],
+        [".ts", ".ts", ".ts", ".ts", ".ts"],
       );
       NodeAssert.equal(input.environment?.T3_MCP_BEARER_TOKEN, "bridge-token");
 
@@ -1004,13 +1017,44 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
         summary: "Inspected repository files",
         precedingToolUseIds: [`${threadId}:pi-session-1:notebook-1`],
       });
-      NodeAssert.deepEqual(runtimeMock.state.runCommandInputs[0]?.args.slice(-6), [
-        "--thinking",
-        "minimal",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "gpt-5.6-luna",
+      NodeAssert.deepEqual(runtimeMock.state.toolSummaryInputs, [
+        {
+          toolName: "exec",
+          args: { code: "await tools.exec_command({ cmd: 'rg TODO' })" },
+        },
+      ]);
+      NodeAssert.equal(runtimeMock.state.runCommandInputs.length, 0);
+    }),
+  );
+
+  it.effect("summarizes notebook management calls", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-notebook-management-summary");
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(5),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* startPiSession(adapter, threadId);
+      yield* adapter.sendTurn({ threadId, input: "Inspect notebook state" });
+      const handle = runtimeMock.state.handles[0]!;
+      yield* Queue.offer(handle.eventsQueue, {
+        type: "tool_execution_start",
+        toolCallId: "notebook-status-1",
+        toolName: "notebook",
+        args: { action: "status", query: "*" },
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      const summary = events.find((event) => event.type === "tool.summary");
+      NodeAssert.deepEqual(summary?.payload, {
+        summary: "Inspected notebook state",
+        precedingToolUseIds: [`${threadId}:pi-session-1:notebook-status-1`],
+      });
+      NodeAssert.deepEqual(runtimeMock.state.toolSummaryInputs, [
+        { toolName: "notebook", args: { action: "status", query: "*" } },
       ]);
     }),
   );

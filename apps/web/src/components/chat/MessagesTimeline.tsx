@@ -9,7 +9,11 @@ import {
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { CodexArtifactTemplate } from "@t3tools/client-runtime/codex-artifact-templates";
 import { commandProgramName } from "@t3tools/client-runtime/work-log/command-label";
-import { toolLifecycleFallbackLabel } from "@t3tools/client-runtime/work-log/presentation";
+import {
+  generatedPiToolLabel,
+  previousGeneratedPiToolLabel,
+  toolLifecycleFallbackLabel,
+} from "@t3tools/client-runtime/work-log/presentation";
 import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   emptyAgentPanelModel,
@@ -1499,7 +1503,7 @@ function LiveActivityContent({
 
 function LiveWorkEntryTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "work-live" }> }) {
   const ctx = use(TimelineRowCtx);
-  const label = liveWorkEntryLabel(row.entry, ctx.workspaceRoot);
+  const label = liveWorkEntryLabel(row.entry, ctx.workspaceRoot, row.groupedEntries);
   const failed = workEntryDisplayIndicatesToolFailure(row.entry);
 
   return (
@@ -2198,12 +2202,10 @@ function notebookToolCode(
 }
 
 function notebookWorkEntryLabel(workEntry: TimelineWorkEntry): string | null {
+  const generatedLabel = generatedPiToolLabel(workEntry);
+  if (generatedLabel) return capitalizePhrase(generatedLabel);
   if (workEntry.itemType !== "dynamic_tool_call" || workEntry.toolTitle?.toLowerCase() !== "exec") {
     return null;
-  }
-  const generatedLabel = normalizeCompactToolLabel(workEntry.label);
-  if (generatedLabel.toLowerCase() !== "exec" && generatedLabel.toLowerCase() !== "exec started") {
-    return capitalizePhrase(generatedLabel);
   }
   return workEntry.toolLifecycleStatus === "inProgress" ? "Running command" : "Ran command";
 }
@@ -2211,17 +2213,24 @@ function notebookWorkEntryLabel(workEntry: TimelineWorkEntry): string | null {
 function liveWorkEntryLabel(
   workEntry: TimelineWorkEntry,
   workspaceRoot: string | undefined,
+  groupedEntries: ReadonlyArray<TimelineWorkEntry>,
 ): string {
   const notebookLabel = notebookWorkEntryLabel(workEntry);
-  if (notebookLabel) return notebookLabel;
+  if (notebookLabel && notebookLabel !== "Running command" && notebookLabel !== "Ran command") {
+    return notebookLabel;
+  }
   const command = workEntry.command?.trim();
   if (command) {
     // This row describes the active parent turn, not the command lifecycle.
     // Keep its live "Running" copy until the turn or contiguous tool run settles.
     const program = commandProgramName(command);
     if (program) return `Running ${program}`;
-    return "Running command";
   }
+
+  const previousGeneratedLabel = previousGeneratedPiToolLabel(groupedEntries, workEntry);
+  if (previousGeneratedLabel) return capitalizePhrase(previousGeneratedLabel);
+  if (notebookLabel) return notebookLabel;
+  if (command) return "Running command";
 
   const fallbackLabel = toolLifecycleFallbackLabel(workEntry);
   if (fallbackLabel) return fallbackLabel;

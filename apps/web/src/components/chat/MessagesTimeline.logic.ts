@@ -1,5 +1,6 @@
 import * as Equal from "effect/Equal";
 import { renderCodexDirectivesForCopy } from "@t3tools/client-runtime/codex-markdown-directives";
+import { generatedPiToolLabel } from "@t3tools/client-runtime/work-log/presentation";
 import {
   formatDuration,
   workEntryDisplayIndicatesToolFailure,
@@ -345,11 +346,7 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
 export function summarizeToolGroup(entries: ReadonlyArray<WorkLogEntry>): string {
   const summaryEntries = omitSupersededLifecycleMarkers(entries, (entry) => entry);
   const onlyEntry = summaryEntries.length === 1 ? summaryEntries[0] : undefined;
-  if (
-    onlyEntry?.itemType === "dynamic_tool_call" &&
-    onlyEntry.toolTitle?.toLowerCase() === "exec" &&
-    !/^exec(?: started)?$/iu.test(onlyEntry.label.trim())
-  ) {
+  if (onlyEntry?.itemType === "dynamic_tool_call" && generatedPiToolLabel(onlyEntry)) {
     return onlyEntry.label;
   }
   const groupedEntries = new Map<ToolGroupAction, WorkLogEntry[]>();

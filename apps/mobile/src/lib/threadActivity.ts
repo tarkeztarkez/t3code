@@ -14,8 +14,10 @@ import type {
 } from "@t3tools/contracts";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import {
+  generatedPiToolLabel,
   normalizeCompactToolLabel,
   omitSupersededLifecycleMarkers,
+  previousGeneratedPiToolLabel,
   toolLifecycleFallbackLabel,
   summarizeToolGroup,
   toolGroupSummaryKind,
@@ -609,10 +611,11 @@ function mergeDerivedWorkLogEntries(
   const toolLifecycleStatus = next.toolLifecycleStatus ?? previous.toolLifecycleStatus;
   const toolCallId = next.toolCallId ?? previous.toolCallId;
   const toolData = next.toolData ?? previous.toolData;
+  const lifecycleToolTitle = toolTitle?.trim();
   const label =
-    previous.toolTitle?.toLowerCase() === "exec" &&
-    !/^exec(?: started)?$/iu.test(previous.label.trim()) &&
-    /^exec(?: started)?$/iu.test(next.label.trim())
+    generatedPiToolLabel(previous) &&
+    lifecycleToolTitle !== undefined &&
+    next.label.trim().toLowerCase() === lifecycleToolTitle.toLowerCase()
       ? previous.label
       : next.label;
   const summaryPatch = next.itemType === undefined && next.toolCallId !== undefined;
@@ -854,12 +857,10 @@ function notebookToolCode(entry: Pick<WorkLogEntry, "itemType" | "toolData">): s
 }
 
 function notebookWorkEntryLabel(entry: WorkLogEntry): string | null {
+  const generatedLabel = generatedPiToolLabel(entry);
+  if (generatedLabel) return capitalizePhrase(generatedLabel);
   if (entry.itemType !== "dynamic_tool_call" || entry.toolTitle?.toLowerCase() !== "exec") {
     return null;
-  }
-  const generatedLabel = normalizeCompactToolLabel(entry.label);
-  if (generatedLabel.toLowerCase() !== "exec" && generatedLabel.toLowerCase() !== "exec started") {
-    return capitalizePhrase(generatedLabel);
   }
   return entry.toolLifecycleStatus === "inProgress" ? "Running command" : "Ran command";
 }
@@ -1542,7 +1543,7 @@ function appendToolGroupRows(
     ? activities.at(-1)!
     : (latestInProgressActivity ?? activities.at(-1)!);
   const summary = live
-    ? liveToolActivitySummary(latestActivity)
+    ? liveToolActivitySummary(latestActivity, activities)
     : activities.length === 1 && !activities[0]!.toolLike
       ? activities[0]!.workEntry.label
       : summarizeToolGroup(activities.map((activity) => activity.workEntry));
@@ -1589,14 +1590,26 @@ function appendToolGroupRows(
   }
 }
 
-function liveToolActivitySummary(activity: ThreadFeedActivity): string {
+function liveToolActivitySummary(
+  activity: ThreadFeedActivity,
+  activities: ReadonlyArray<ThreadFeedActivity>,
+): string {
   const notebookLabel = notebookWorkEntryLabel(activity.workEntry);
-  if (notebookLabel) return notebookLabel;
+  if (notebookLabel && notebookLabel !== "Running command" && notebookLabel !== "Ran command") {
+    return notebookLabel;
+  }
   const command = activity.workEntry.command?.trim();
   if (command) {
     const program = commandProgramName(command);
-    return program ? `Running ${program}` : "Running command";
+    if (program) return `Running ${program}`;
   }
+  const previousGeneratedLabel = previousGeneratedPiToolLabel(
+    activities.map((entry) => entry.workEntry),
+    activity.workEntry,
+  );
+  if (previousGeneratedLabel) return capitalizePhrase(previousGeneratedLabel);
+  if (notebookLabel) return notebookLabel;
+  if (command) return "Running command";
   const fallbackLabel = toolLifecycleFallbackLabel(activity.workEntry);
   if (fallbackLabel) return fallbackLabel;
   return activity.detail ?? activity.summary;

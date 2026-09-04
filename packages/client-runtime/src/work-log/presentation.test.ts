@@ -1,5 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { toolLifecycleFallbackLabel } from "./presentation.js";
+import {
+  generatedPiToolLabel,
+  previousGeneratedPiToolLabel,
+  toolLifecycleFallbackLabel,
+} from "./presentation.js";
+
+const toolEntry = (toolTitle: string, label: string) => ({
+  label,
+  toolTitle,
+  tone: "tool" as const,
+  itemType: "dynamic_tool_call" as const,
+});
+
+describe("generated Pi tool labels", () => {
+  it("recognizes generated exec and notebook labels", () => {
+    expect(generatedPiToolLabel(toolEntry("exec", "Inspected repository files"))).toBe(
+      "Inspected repository files",
+    );
+    expect(generatedPiToolLabel(toolEntry("notebook", "Checked notebook state"))).toBe(
+      "Checked notebook state",
+    );
+    expect(generatedPiToolLabel(toolEntry("exec", "exec started"))).toBeNull();
+  });
+
+  it("finds a previous generated label without treating the current entry as previous", () => {
+    expect(
+      previousGeneratedPiToolLabel([
+        toolEntry("exec", "Inspected repository files"),
+        toolEntry("wait", "wait"),
+      ]),
+    ).toBe("Inspected repository files");
+    expect(previousGeneratedPiToolLabel([toolEntry("exec", "exec")])).toBeNull();
+  });
+});
 
 describe("toolLifecycleFallbackLabel", () => {
   it("hides partial tool output until the call finishes", () => {

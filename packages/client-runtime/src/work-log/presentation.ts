@@ -36,6 +36,36 @@ export function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
 }
 
+export function generatedPiToolLabel(entry: WorkLogPresentationEntry): string | null {
+  const toolTitle = entry.toolTitle?.toLowerCase();
+  if (toolTitle !== "exec" && toolTitle !== "notebook") return null;
+  const label = normalizeCompactToolLabel(entry.label);
+  if (
+    label.length === 0 ||
+    label.toLowerCase() === toolTitle ||
+    label.toLowerCase() === `${toolTitle} started`
+  ) {
+    return null;
+  }
+  return label;
+}
+
+export function previousGeneratedPiToolLabel(
+  entries: ReadonlyArray<WorkLogPresentationEntry>,
+  currentEntry: WorkLogPresentationEntry = entries.at(-1)!,
+): string | null {
+  const currentIndex = entries.lastIndexOf(currentEntry);
+  for (
+    let index = (currentIndex === -1 ? entries.length : currentIndex) - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const label = generatedPiToolLabel(entries[index]!);
+    if (label) return label;
+  }
+  return null;
+}
+
 function workLogEntryIsToolLike(entry: WorkLogPresentationEntry): boolean {
   if (entry.tone === "tool" || entry.tone === "thinking" || entry.tone === "error") return true;
   if (entry.command !== undefined && entry.command.trim().length > 0) return true;
@@ -135,11 +165,7 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
 export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEntry>): string {
   const summaryEntries = omitSupersededLifecycleMarkers(entries, (entry) => entry);
   const onlyEntry = summaryEntries.length === 1 ? summaryEntries[0] : undefined;
-  if (
-    onlyEntry?.itemType === "dynamic_tool_call" &&
-    onlyEntry.toolTitle?.toLowerCase() === "exec" &&
-    !/^exec(?: started)?$/iu.test(onlyEntry.label.trim())
-  ) {
+  if (onlyEntry?.itemType === "dynamic_tool_call" && generatedPiToolLabel(onlyEntry)) {
     return onlyEntry.label;
   }
   const groupedEntries = new Map<ToolGroupAction, WorkLogPresentationEntry[]>();

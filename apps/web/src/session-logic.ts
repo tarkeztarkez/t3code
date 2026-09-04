@@ -2,6 +2,7 @@ import * as Option from "effect/Option";
 import * as Arr from "effect/Array";
 import * as Schema from "effect/Schema";
 import { isBackgroundTaskActivity } from "@t3tools/client-runtime/state/subagentRuntime";
+import { generatedPiToolLabel } from "@t3tools/client-runtime/work-log/presentation";
 import {
   ApprovalRequestId,
   isToolLifecycleItemType,
@@ -1179,10 +1180,11 @@ function mergeDerivedWorkLogEntries(
   const toolCallId = next.toolCallId ?? previous.toolCallId;
   const toolLifecycleStatus = next.toolLifecycleStatus ?? previous.toolLifecycleStatus;
   const toolData = next.toolData ?? previous.toolData;
+  const lifecycleToolTitle = toolTitle?.trim();
   const label =
-    previous.toolTitle?.toLowerCase() === "exec" &&
-    !/^exec(?: started)?$/iu.test(previous.label.trim()) &&
-    /^exec(?: started)?$/iu.test(next.label.trim())
+    generatedPiToolLabel(previous) &&
+    lifecycleToolTitle !== undefined &&
+    next.label.trim().toLowerCase() === lifecycleToolTitle.toLowerCase()
       ? previous.label
       : next.label;
   const summaryPatch = next.itemType === undefined && next.toolCallId !== undefined;

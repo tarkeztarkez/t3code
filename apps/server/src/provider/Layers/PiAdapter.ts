@@ -14,6 +14,7 @@ import {
   TurnId,
   type UserInputQuestion,
 } from "@t3tools/contracts";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { toToolLifecycleItemType } from "@t3tools/shared/toolLifecycle";
 import * as Cause from "effect/Cause";
@@ -75,7 +76,7 @@ const PI_SKILL_INVENTORY_CACHE_MS = 4_000;
 const PI_RESUME_CURSOR_VERSION = 1 as const;
 const PI_SUBAGENTS_FLEET_PREFIX = "T3_SUBAGENTS ";
 const PI_NOTEBOOK_SUMMARY_MODEL = "gpt-5.6-luna";
-const PI_NOTEBOOK_SUMMARY_MAX_CODE_CHARS = 20_000;
+const PI_TOOL_SUMMARY_MAX_INPUT_CHARS = 20_000;
 const PiSubagentFleet = Schema.Array(
   Schema.Struct({
     id: Schema.String,
@@ -191,7 +192,15 @@ export interface PiAdapterLiveOptions {
   readonly nativeEventLogger?: EventNdjsonLogger;
   readonly command?: PiCommand;
   readonly extensionPaths?: ReadonlyArray<string>;
+  readonly toolSummaryGenerator?: PiToolSummaryGenerator;
 }
+
+export interface PiToolSummaryInput {
+  readonly toolName: string;
+  readonly args: unknown;
+}
+
+export type PiToolSummaryGenerator = (input: PiToolSummaryInput) => Promise<string | null>;
 
 type EventBaseInput = {
   readonly threadId: ThreadId;
@@ -226,15 +235,23 @@ function notebookCodeFromArgs(args: unknown): string | undefined {
   return typeof code === "string" && code.trim().length > 0 ? code.trim() : undefined;
 }
 
-export function notebookToolSummaryPrompt(code: string): string {
+export function toolSummaryPrompt(input: PiToolSummaryInput): string {
+  const subject =
+    input.toolName === "exec" && notebookCodeFromArgs(input.args)
+      ? notebookCodeFromArgs(input.args)!
+      : JSON.stringify({ tool: input.toolName, input: input.args });
   return [
-    "Write one short past-tense activity label for this coding-agent notebook cell.",
+    "Write one short past-tense activity label for this coding-agent operation.",
     "Describe its purpose, not JavaScript mechanics. Use 3-10 words and at most 72 characters.",
     "Do not use quotes, markdown, a trailing period, or the words command, tool, or notebook.",
     "Return only the label.",
     "",
-    code.slice(0, PI_NOTEBOOK_SUMMARY_MAX_CODE_CHARS),
+    subject.slice(0, PI_TOOL_SUMMARY_MAX_INPUT_CHARS),
   ].join("\n");
+}
+
+export function notebookToolSummaryPrompt(code: string): string {
+  return toolSummaryPrompt({ toolName: "exec", args: { code } });
 }
 
 export function normalizeNotebookToolSummary(value: string): string | null {
@@ -246,6 +263,58 @@ export function normalizeNotebookToolSummary(value: string): string | null {
     .trim();
   if (!firstLine) return null;
   return firstLine.length <= 72 ? firstLine : `${firstLine.slice(0, 71).trimEnd()}…`;
+}
+
+function makePiToolSummaryGenerator(
+  environment: NodeJS.ProcessEnv | undefined,
+): PiToolSummaryGenerator {
+  let runtimePromise: Promise<ModelRuntime> | undefined;
+  const providerEnvironment = environment
+    ? Object.fromEntries(
+        Object.entries(environment).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
+        ),
+      )
+    : undefined;
+  return async (input) => {
+    const agentDir = providerEnvironment?.PI_CODING_AGENT_DIR;
+    runtimePromise ??= ModelRuntime.create({
+      refreshOnCreate: false,
+      ...(agentDir
+        ? {
+            authPath: `${agentDir}/auth.json`,
+            modelsPath: `${agentDir}/models.json`,
+          }
+        : {}),
+    });
+    const runtime = await runtimePromise;
+    const model = runtime.getModel("openai-codex", PI_NOTEBOOK_SUMMARY_MODEL);
+    if (!model) return null;
+    const message = await runtime.completeSimple(
+      model,
+      {
+        messages: [
+          {
+            role: "user",
+            content: toolSummaryPrompt(input),
+            timestamp: 0,
+          },
+        ],
+      },
+      {
+        reasoning: "minimal",
+        timeoutMs: 30_000,
+        maxRetries: 0,
+        ...(providerEnvironment ? { env: providerEnvironment } : {}),
+      },
+    );
+    if (message.stopReason === "error" || message.stopReason === "aborted") return null;
+    const text = message.content
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("");
+    return normalizeNotebookToolSummary(text);
+  };
 }
 
 function textFromContentBlocks(content: PiMessageContent | undefined): string {
@@ -531,6 +600,8 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
     const crypto = yield* Crypto.Crypto;
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const generateToolSummary =
+      options?.toolSummaryGenerator ?? makePiToolSummaryGenerator(options?.environment);
     const nativeEventLogger =
       options?.nativeEventLogger ??
       (options?.nativeEventLogPath !== undefined
@@ -650,38 +721,13 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
 
     const emit = (event: ProviderRuntimeEvent) =>
       Queue.offer(runtimeEvents, event).pipe(Effect.asVoid);
-    const summarizeNotebookTool = Effect.fn("summarizeNotebookTool")(function* (
+    const summarizeTool = Effect.fn("summarizeTool")(function* (
       context: PiSessionContext,
       turnId: TurnId | undefined,
       toolCallId: string,
-      code: string,
+      input: PiToolSummaryInput,
     ) {
-      const result = yield* piRuntime.runCommand({
-        binaryPath: options?.command?.binaryPath ?? piSettings.binaryPath,
-        ...(options?.command?.argsPrefix ? { argsPrefix: options.command.argsPrefix } : {}),
-        args: [
-          "--print",
-          "--mode",
-          "text",
-          "--no-session",
-          "--no-tools",
-          "--no-extensions",
-          "--no-skills",
-          "--no-prompt-templates",
-          "--no-context-files",
-          "--thinking",
-          "minimal",
-          "--provider",
-          "openai-codex",
-          "--model",
-          PI_NOTEBOOK_SUMMARY_MODEL,
-        ],
-        stdin: notebookToolSummaryPrompt(code),
-        ...(options?.environment ? { environment: options.environment } : {}),
-        ...(context.session.cwd ? { cwd: context.session.cwd } : {}),
-      });
-      if (result.code !== 0) return;
-      const summary = normalizeNotebookToolSummary(result.stdout);
+      const summary = yield* Effect.promise(() => generateToolSummary(input));
       if (!summary) return;
       yield* emit({
         ...(yield* buildEventBase({
@@ -1185,12 +1231,15 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
                   : "item.updated",
             payload,
           });
-          const notebookCode =
-            event.type === "tool_execution_start" && toolName === "exec"
-              ? notebookCodeFromArgs(event.args)
-              : undefined;
-          if (notebookCode) {
-            yield* summarizeNotebookTool(context, turnId, toolCallId, notebookCode).pipe(
+          const shouldSummarize =
+            event.type === "tool_execution_start" &&
+            ((toolName === "exec" && notebookCodeFromArgs(event.args) !== undefined) ||
+              toolName === "notebook");
+          if (shouldSummarize) {
+            yield* summarizeTool(context, turnId, toolCallId, {
+              toolName,
+              args: event.args,
+            }).pipe(
               Effect.timeout("30 seconds"),
               Effect.ignore({ log: true }),
               Effect.forkIn(context.sessionScope),
