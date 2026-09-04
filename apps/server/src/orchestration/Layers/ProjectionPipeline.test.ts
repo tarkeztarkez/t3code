@@ -2761,6 +2761,44 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
 it.layer(makeProjectionPipelinePrefixedTestLayer("t3-pending-turn-terminal-test-"))(
   "OrchestrationProjectionPipeline pending turn cleanup",
   (it) => {
+    it.effect("does not create a pending turn row for a steer", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const threadId = ThreadId.make("thread-steer");
+        const requestedAt = "2026-02-26T13:59:00.000Z";
+
+        yield* eventStore.append({
+          type: "thread.turn-start-requested",
+          eventId: EventId.make("evt-steer-request"),
+          aggregateKind: "thread",
+          aggregateId: threadId,
+          occurredAt: requestedAt,
+          commandId: CommandId.make("cmd-steer-request"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-steer-request"),
+          metadata: {},
+          payload: {
+            threadId,
+            messageId: MessageId.make("message-steer"),
+            steerTurnId: TurnId.make("turn-running"),
+            runtimeMode: "approval-required",
+            createdAt: requestedAt,
+          },
+        });
+
+        yield* projectionPipeline.bootstrap;
+
+        const pendingRows = yield* sql<{ readonly threadId: string }>`
+          SELECT thread_id AS "threadId"
+          FROM projection_turns
+          WHERE thread_id = ${threadId}
+        `;
+        assert.deepEqual(pendingRows, []);
+      }),
+    );
+
     it.effect("clears pending turn starts when startup reaches a terminal session state", () =>
       Effect.gen(function* () {
         const projectionPipeline = yield* OrchestrationProjectionPipeline;

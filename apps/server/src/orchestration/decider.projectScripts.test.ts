@@ -5,6 +5,7 @@ import {
   MessageId,
   ProjectId,
   ThreadId,
+  TurnId,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
@@ -340,6 +341,111 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
         ]),
         runtimeMode: "approval-required",
       });
+    }),
+  );
+
+  it.effect("targets a message at the running turn when thread.turn.start is a steer", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const threadId = ThreadId.make("thread-steer");
+      const activeTurnId = TurnId.make("turn-running");
+      const withProject = yield* projectEvent(createEmptyReadModel(now), {
+        sequence: 1,
+        eventId: asEventId("evt-project-create-steer"),
+        aggregateKind: "project",
+        aggregateId: asProjectId("project-steer"),
+        type: "project.created",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-project-create-steer"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-project-create-steer"),
+        metadata: {},
+        payload: {
+          projectId: asProjectId("project-steer"),
+          title: "Project",
+          workspaceRoot: "/tmp/project-steer",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      const withThread = yield* projectEvent(withProject, {
+        sequence: 2,
+        eventId: asEventId("evt-thread-create-steer"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        type: "thread.created",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-thread-create-steer"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-thread-create-steer"),
+        metadata: {},
+        payload: {
+          threadId,
+          projectId: asProjectId("project-steer"),
+          title: "Thread",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("pi"),
+            model: "openai/gpt-5",
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      const readModel = yield* projectEvent(withThread, {
+        sequence: 3,
+        eventId: asEventId("evt-session-running-steer"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        type: "thread.session-set",
+        occurredAt: now,
+        commandId: CommandId.make("cmd-session-running-steer"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-session-running-steer"),
+        metadata: {},
+        payload: {
+          threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "pi",
+            providerInstanceId: ProviderInstanceId.make("pi"),
+            runtimeMode: "approval-required",
+            activeTurnId,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      });
+
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-turn-steer"),
+          threadId,
+          message: {
+            messageId: asMessageId("message-steer"),
+            role: "user",
+            text: "stop after this tool",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        },
+        readModel,
+      });
+
+      const events = Array.isArray(result) ? result : [result];
+      const messageEvent = events.find((event) => event.type === "thread.message-sent");
+      const requestEvent = events.find((event) => event.type === "thread.turn-start-requested");
+      expect(messageEvent?.payload).toMatchObject({ turnId: activeTurnId });
+      expect(requestEvent?.payload).toMatchObject({ steerTurnId: activeTurnId });
     }),
   );
 
