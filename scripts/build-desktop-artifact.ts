@@ -2191,6 +2191,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
+      // Both architecture builds carry both Clerk passkey binaries. They are
+      // already architecture-qualified, so the universal merger must retain
+      // them instead of trying to combine each pair with lipo.
+      x64ArchFiles: "**/electron-passkeys.darwin-*.node",
       protocols: [
         {
           name: "T3 Code",

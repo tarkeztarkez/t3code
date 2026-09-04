@@ -660,7 +660,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
-      assert.notProperty(mac.mac as Record<string, unknown>, "sign");
+      const macConfig = mac.mac as Record<string, unknown>;
+      assert.equal(macConfig.x64ArchFiles, "**/electron-passkeys.darwin-*.node");
+      assert.notProperty(macConfig, "sign");
       for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
         assert.deepStrictEqual(config.files, DESKTOP_FILE_EXCLUSIONS);
