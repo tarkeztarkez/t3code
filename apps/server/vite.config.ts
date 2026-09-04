@@ -1,4 +1,5 @@
 import "vite-plus/test/config";
+import { fileURLToPath } from "node:url";
 import { defineConfig, mergeConfig } from "vite-plus";
 
 import baseConfig from "../../vite.config.ts";
@@ -22,6 +23,12 @@ export { shouldBundleCliDependency };
 
 const repoEnv = loadRepoEnv();
 const cliBuildChannel = packageJson.version.includes("-nightly.") ? "nightly" : "latest";
+const piModelRuntimePath = fileURLToPath(
+  new URL(
+    "./node_modules/@earendil-works/pi-coding-agent/dist/core/model-runtime.js",
+    import.meta.url,
+  ),
+);
 
 export default mergeConfig(
   baseConfig,
@@ -36,6 +43,9 @@ export default mergeConfig(
       },
     },
     pack: {
+      alias: {
+        "@earendil-works/pi-coding-agent": piModelRuntimePath,
+      },
       entry: ["src/bin.ts"],
       outDir: "dist",
       sourcemap: true,
