@@ -2195,6 +2195,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // addons in both builds. When the copies are byte-identical, retain one
       // instead of asking the universal merger to combine the same binary.
       x64ArchFiles: "**/*",
+      // @electron/universal expands every unpacked native file into one
+      // minimatch expression when merging ASARs, which exceeds its size limit.
+      mergeASARs: false,
       protocols: [
         {
           name: "T3 Code",

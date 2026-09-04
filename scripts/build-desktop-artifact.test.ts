@@ -662,6 +662,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
       const macConfig = mac.mac as Record<string, unknown>;
       assert.equal(macConfig.x64ArchFiles, "**/*");
+      assert.equal(macConfig.mergeASARs, false);
       assert.notProperty(macConfig, "sign");
       for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
