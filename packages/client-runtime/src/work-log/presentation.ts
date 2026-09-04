@@ -42,6 +42,12 @@ function workLogEntryIsToolLike(entry: WorkLogPresentationEntry): boolean {
   return entry.itemType !== undefined && isToolLifecycleItemType(entry.itemType);
 }
 
+export function runningToolFallbackLabel(entry: WorkLogPresentationEntry): string | null {
+  return entry.toolLifecycleStatus === "inProgress" && workLogEntryIsToolLike(entry)
+    ? "Running tool"
+    : null;
+}
+
 export function workLogEntryIsLocalCodeSearch(entry: WorkLogPresentationEntry): boolean {
   return (
     entry.itemType === "web_search" &&
