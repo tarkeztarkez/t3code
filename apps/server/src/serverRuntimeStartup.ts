@@ -295,6 +295,18 @@ const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>)
 
 const ORPHANED_PROVIDER_SESSION_ERROR =
   "Provider session did not survive a server restart. Send a new message to continue.";
+const RESTART_CONTINUATION_PROMPT =
+  "T3 Code restarted while this task was running. Inspect the existing conversation and current working tree, then continue the task without repeating completed work. If the task already finished, summarize the result.";
+
+function shouldResumeAfterRestart(runtimePayload: unknown): boolean {
+  return (
+    runtimePayload !== null &&
+    typeof runtimePayload === "object" &&
+    !Array.isArray(runtimePayload) &&
+    "resumeAfterRestart" in runtimePayload &&
+    runtimePayload.resumeAfterRestart === true
+  );
+}
 
 export const reconcileProviderSessions = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
@@ -306,11 +318,26 @@ export const reconcileProviderSessions = Effect.gen(function* () {
   const liveThreadIds = new Set(
     (yield* providerService.listSessions()).map((session) => session.threadId),
   );
+  const restartBindings = yield* directory.listBindings().pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.failCause(cause)
+        : Effect.logWarning("failed to list provider sessions marked for restart", {
+            cause,
+          }).pipe(Effect.as([] as ReadonlyArray<ProviderSessionDirectory.ProviderRuntimeBinding>)),
+    ),
+  );
+  const restartThreadIds = new Set(
+    restartBindings
+      .filter((binding) => shouldResumeAfterRestart(binding.runtimePayload))
+      .map((binding) => binding.threadId),
+  );
   const { threads } = yield* query.getCommandReadModel();
   const orphanedThreads = threads.filter(
     (thread) =>
       thread.session !== null &&
-      (thread.session.status === "starting" ||
+      (restartThreadIds.has(thread.id) ||
+        thread.session.status === "starting" ||
         thread.session.status === "running" ||
         thread.session.activeTurnId !== null) &&
       !liveThreadIds.has(thread.id),
@@ -321,8 +348,107 @@ export const reconcileProviderSessions = Effect.gen(function* () {
     if (session === null) {
       continue;
     }
+    const binding = yield* directory.getBinding(thread.id).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("failed to read orphaned provider session directory binding", {
+              threadId: thread.id,
+              cause,
+            }).pipe(Effect.as(Option.none())),
+      ),
+    );
+    const canResume =
+      thread.archivedAt === null &&
+      Option.isSome(binding) &&
+      binding.value.providerInstanceId !== undefined &&
+      binding.value.resumeCursor !== null &&
+      binding.value.resumeCursor !== undefined;
+
+    if (canResume) {
+      const preparedAt = DateTime.formatIso(yield* DateTime.now);
+      const prepared = yield* orchestrationEngine
+        .dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make(yield* crypto.randomUUIDv4),
+          threadId: thread.id,
+          session: {
+            ...session,
+            status: "starting",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: preparedAt,
+          },
+          createdAt: preparedAt,
+        })
+        .pipe(
+          Effect.retry({ times: 1 }),
+          Effect.as(true),
+          Effect.catchCause((cause) =>
+            Cause.hasInterrupts(cause)
+              ? Effect.failCause(cause)
+              : Effect.logWarning("failed to prepare orphaned provider session for resume", {
+                  threadId: thread.id,
+                  cause,
+                }).pipe(Effect.as(false)),
+          ),
+        );
+
+      if (prepared) {
+        const resumedTurn = yield* providerService
+          .sendTurn({
+            threadId: thread.id,
+            input: RESTART_CONTINUATION_PROMPT,
+          })
+          .pipe(
+            Effect.map(Option.some),
+            Effect.catchCause((cause) =>
+              Cause.hasInterrupts(cause)
+                ? Effect.failCause(cause)
+                : Effect.logWarning("failed to resume orphaned provider session", {
+                    threadId: thread.id,
+                    cause,
+                  }).pipe(Effect.as(Option.none())),
+            ),
+          );
+
+        if (Option.isSome(resumedTurn)) {
+          const resumedAt = DateTime.formatIso(yield* DateTime.now);
+          yield* orchestrationEngine
+            .dispatch({
+              type: "thread.session.set",
+              commandId: CommandId.make(yield* crypto.randomUUIDv4),
+              threadId: thread.id,
+              session: {
+                ...session,
+                status: "running",
+                activeTurnId: resumedTurn.value.turnId,
+                lastError: null,
+                updatedAt: resumedAt,
+              },
+              createdAt: resumedAt,
+            })
+            .pipe(
+              Effect.retry({ times: 1 }),
+              Effect.catchCause((cause) =>
+                Cause.hasInterrupts(cause)
+                  ? Effect.failCause(cause)
+                  : Effect.logWarning("failed to project resumed provider session", {
+                      threadId: thread.id,
+                      cause,
+                    }),
+              ),
+            );
+          yield* Effect.logInfo("resumed provider session after server restart", {
+            threadId: thread.id,
+            turnId: resumedTurn.value.turnId,
+          });
+          continue;
+        }
+      }
+    }
+
     yield* Effect.gen(function* () {
-      const binding = yield* directory.getBinding(thread.id);
       if (Option.isSome(binding)) {
         yield* directory.upsert({
           ...binding.value,

@@ -1183,6 +1183,11 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ),
       ),
     ).pipe(Effect.map((sessionsByAdapter) => sessionsByAdapter.flatMap((sessions) => sessions)));
+    const threadsToResume = new Set(
+      activeSessions
+        .filter((session) => session.status === "running" || session.activeTurnId !== undefined)
+        .map((session) => session.threadId),
+    );
     yield* Effect.forEach(activeSessions, (session) =>
       Effect.flatMap(nowIso, (lastRuntimeEventAt) =>
         upsertSessionBinding(session, session.threadId, {
@@ -1207,7 +1212,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           providerInstanceId,
           status: "stopped",
           runtimePayload: {
+            ...(binding.runtimePayload !== null &&
+            typeof binding.runtimePayload === "object" &&
+            !Array.isArray(binding.runtimePayload)
+              ? binding.runtimePayload
+              : {}),
             activeTurnId: null,
+            resumeAfterRestart: threadsToResume.has(binding.threadId),
             lastRuntimeEvent: "provider.stopAll",
             lastRuntimeEventAt: yield* nowIso,
           },

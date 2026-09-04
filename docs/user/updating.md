@@ -15,8 +15,9 @@ update the server, and the version difference remains visible in Connections.
 
 ## Before You Update
 
-Let active agent work and terminal commands finish first. Updating restarts the server, so the
-connection will disappear briefly and work that is still running may be interrupted.
+Updating restarts the server, so the connection will disappear briefly. T3 Code resumes active
+agent tasks after startup when the provider saved enough session state. Terminal commands do not
+resume, and an agent task without resumable provider state will show an error instead.
 
 The update does not remove saved threads, settings, or project files.
 

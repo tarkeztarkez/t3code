@@ -121,7 +121,6 @@ it.effect("reconciles multiple active and archived orphans but skips live sessio
               provider: ProviderDriverKind.make("codex"),
               providerInstanceId,
               status: "running" as const,
-              resumeCursor: { cursor: candidate },
               runtimePayload: { activeTurnId: "stale", unrelated: candidate },
             }),
           ),
@@ -157,8 +156,93 @@ it.effect("reconciles multiple active and archived orphans but skips live sessio
         for (const binding of upserts) {
           assert.equal(binding.status, "stopped");
           assert.deepStrictEqual(binding.runtimePayload, { activeTurnId: null });
-          assert.deepStrictEqual(binding.resumeCursor, { cursor: binding.threadId });
+          assert.equal(binding.resumeCursor, undefined);
         }
+      }),
+    ),
+  );
+});
+
+it.effect("resumes active orphaned sessions from persisted provider state", () => {
+  const thread = makeThread("thread-resume-after-restart", "stopped");
+  const resumedTurnId = TurnId.make("turn-resumed");
+  const dispatched: OrchestrationCommand[] = [];
+  const sentTurns: Array<{ readonly threadId: ThreadId; readonly input: string | undefined }> = [];
+
+  return ServerRuntimeStartup.reconcileProviderSessions.pipe(
+    Effect.provideService(
+      ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+      queryWithThreads([thread]),
+    ),
+    Effect.provideService(ProviderService.ProviderService, {
+      ...makeProviderService(),
+      sendTurn: (input) =>
+        Effect.sync(() => {
+          sentTurns.push({ threadId: input.threadId, input: input.input });
+          return { threadId: input.threadId, turnId: resumedTurnId };
+        }),
+    }),
+    Effect.provideService(ProviderSessionDirectory.ProviderSessionDirectory, {
+      getBinding: () =>
+        Effect.succeed(
+          Option.some({
+            threadId: thread.id,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId,
+            status: "running" as const,
+            resumeCursor: { threadId: "provider-thread" },
+            runtimePayload: { activeTurnId: null, resumeAfterRestart: true },
+          }),
+        ),
+      upsert: () => Effect.die("resumed bindings are managed by ProviderService"),
+      getProvider: () => Effect.die("unused"),
+      listThreadIds: () => Effect.die("unused"),
+      listBindings: () =>
+        Effect.succeed([
+          {
+            threadId: thread.id,
+            provider: ProviderDriverKind.make("codex"),
+            providerInstanceId,
+            status: "stopped" as const,
+            resumeCursor: { threadId: "provider-thread" },
+            runtimePayload: { activeTurnId: null, resumeAfterRestart: true },
+            lastSeenAt: updatedAt,
+          },
+        ]),
+    }),
+    Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
+      readEvents: () => Stream.empty,
+      dispatch: (command) =>
+        Effect.sync(() => dispatched.push(command)).pipe(
+          Effect.as({ sequence: dispatched.length }),
+        ),
+      streamDomainEvents: Stream.empty,
+      latestSequence: Effect.succeed(0),
+    }),
+    Effect.provide(NodeServices.layer),
+    Effect.tap(() =>
+      Effect.sync(() => {
+        assert.equal(sentTurns.length, 1);
+        assert.equal(sentTurns[0]?.threadId, thread.id);
+        assert.match(
+          sentTurns[0]?.input ?? "",
+          /continue the task without repeating completed work/i,
+        );
+        assert.deepStrictEqual(
+          dispatched.map((command) =>
+            command.type === "thread.session.set"
+              ? {
+                  status: command.session.status,
+                  activeTurnId: command.session.activeTurnId,
+                  lastError: command.session.lastError,
+                }
+              : null,
+          ),
+          [
+            { status: "starting", activeTurnId: null, lastError: null },
+            { status: "running", activeTurnId: resumedTurnId, lastError: null },
+          ],
+        );
       }),
     ),
   );

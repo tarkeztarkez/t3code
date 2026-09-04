@@ -851,7 +851,8 @@ it.effect(
         });
         firstCodex.updateSession(threadId, (existing) => ({
           ...existing,
-          status: "ready",
+          status: "running",
+          activeTurnId: TurnId.make("turn-before-restart"),
           resumeCursor: updatedResumeCursor,
           updatedAt: "2026-01-01T00:00:01.000Z",
         }));
@@ -868,6 +869,10 @@ it.effect(
       if (Option.isSome(persistedAfterStopAll)) {
         assert.equal(persistedAfterStopAll.value.status, "stopped");
         assert.deepEqual(persistedAfterStopAll.value.resumeCursor, updatedResumeCursor);
+        assert.deepInclude(persistedAfterStopAll.value.runtimePayload, {
+          activeTurnId: null,
+          resumeAfterRestart: true,
+        });
       }
 
       const secondCodex = makeFakeCodexAdapter();
