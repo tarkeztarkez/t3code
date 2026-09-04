@@ -2194,7 +2194,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // The staged dependency tree carries architecture-qualified native
       // addons in both builds. When the copies are byte-identical, retain one
       // instead of asking the universal merger to combine the same binary.
-      x64ArchFiles: "**/*.node",
+      x64ArchFiles: "**/*",
       protocols: [
         {
           name: "T3 Code",
