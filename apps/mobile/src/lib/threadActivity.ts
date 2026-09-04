@@ -465,6 +465,13 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
       entry.toolData = data.item;
     }
   }
+  if (itemType === "dynamic_tool_call") {
+    const data = asRecord(payload?.data);
+    const args = asRecord(data?.args);
+    if (data?.tool === "exec" && typeof args?.code === "string") {
+      entry.toolData = { tool: "exec", code: args.code };
+    }
+  }
   if (itemType) {
     entry.itemType = itemType;
   }
@@ -568,7 +575,10 @@ function shouldCollapseToolLifecycleEntries(
   if (previous.turnId !== next.turnId) {
     return false;
   }
-  if (previous.sourceActivityKind === "tool.completed") {
+  if (
+    previous.sourceActivityKind === "tool.completed" &&
+    (previous.toolCallId === undefined || previous.toolCallId !== next.toolCallId)
+  ) {
     return false;
   }
   if (previous.collapseKey !== undefined && previous.collapseKey === next.collapseKey) {
@@ -598,11 +608,20 @@ function mergeDerivedWorkLogEntries(
   const toolLifecycleStatus = next.toolLifecycleStatus ?? previous.toolLifecycleStatus;
   const toolCallId = next.toolCallId ?? previous.toolCallId;
   const toolData = next.toolData ?? previous.toolData;
+  const label =
+    previous.toolTitle?.toLowerCase() === "exec" &&
+    !/^exec(?: started)?$/iu.test(previous.label.trim()) &&
+    /^exec(?: started)?$/iu.test(next.label.trim())
+      ? previous.label
+      : next.label;
+  const summaryPatch = next.itemType === undefined && next.toolCallId !== undefined;
   return {
     ...previous,
     ...next,
+    label,
     id: previous.id,
     createdAt: previous.createdAt,
+    ...(summaryPatch ? { sourceActivityKind: previous.sourceActivityKind } : {}),
     ...(detail ? { detail } : {}),
     ...(command ? { command } : {}),
     ...(rawCommand ? { rawCommand } : {}),
@@ -755,6 +774,10 @@ function buildWorkEntryExpandedBody(entry: WorkLogEntry): string | null {
     }
   };
 
+  const notebookCode = notebookToolCode(entry);
+  if (notebookCode) {
+    appendUniqueBlock(`Notebook cell\n${notebookCode}`);
+  }
   if (entry.itemType === "mcp_tool_call" && entry.toolData !== undefined) {
     appendUniqueBlock(`MCP call\n${JSON.stringify(entry.toolData, null, 2)}`);
   }
@@ -770,6 +793,7 @@ function buildWorkEntryExpandedBody(entry: WorkLogEntry): string | null {
 function workEntryHasExpandedBody(entry: WorkLogEntry): boolean {
   return (
     (entry.itemType === "mcp_tool_call" && entry.toolData !== undefined) ||
+    notebookToolCode(entry) !== null ||
     Boolean((entry.rawCommand ?? entry.command)?.trim()) ||
     Boolean(entry.detail?.trim()) ||
     (entry.changedFiles?.some((path) => path.trim().length > 0) ?? false)
@@ -810,10 +834,31 @@ function capitalizePhrase(value: string): string {
 }
 
 function workEntryHeading(workEntry: WorkLogEntry): string {
+  const notebookLabel = notebookWorkEntryLabel(workEntry);
+  if (notebookLabel) return notebookLabel;
   if (!workEntry.toolTitle) {
     return capitalizePhrase(normalizeCompactToolLabel(workEntry.label));
   }
   return capitalizePhrase(normalizeCompactToolLabel(workEntry.toolTitle));
+}
+
+function notebookToolCode(entry: Pick<WorkLogEntry, "itemType" | "toolData">): string | null {
+  if (entry.itemType !== "dynamic_tool_call") return null;
+  const data = entry.toolData;
+  if (!data || typeof data !== "object" || !("tool" in data) || data.tool !== "exec") return null;
+  if (!("code" in data) || typeof data.code !== "string") return null;
+  return data.code.trim() || null;
+}
+
+function notebookWorkEntryLabel(entry: WorkLogEntry): string | null {
+  if (entry.itemType !== "dynamic_tool_call" || entry.toolTitle?.toLowerCase() !== "exec") {
+    return null;
+  }
+  const generatedLabel = normalizeCompactToolLabel(entry.label);
+  if (generatedLabel.toLowerCase() !== "exec" && generatedLabel.toLowerCase() !== "exec started") {
+    return capitalizePhrase(generatedLabel);
+  }
+  return entry.toolLifecycleStatus === "inProgress" ? "Running command" : "Ran command";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1542,6 +1587,8 @@ function appendToolGroupRows(
 }
 
 function liveToolActivitySummary(activity: ThreadFeedActivity): string {
+  const notebookLabel = notebookWorkEntryLabel(activity.workEntry);
+  if (notebookLabel) return notebookLabel;
   const command = activity.workEntry.command?.trim();
   if (command) {
     const program = commandProgramName(command);

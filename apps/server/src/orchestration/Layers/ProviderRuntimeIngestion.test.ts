@@ -47,7 +47,10 @@ import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
-import { ProviderRuntimeIngestionLive } from "./ProviderRuntimeIngestion.ts";
+import {
+  ProviderRuntimeIngestionLive,
+  runtimeEventToActivities,
+} from "./ProviderRuntimeIngestion.ts";
 import { DEFAULT_THREAD_TITLE } from "../threadTitles.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
@@ -66,6 +69,30 @@ const asEventId = (value: string): EventId => EventId.make(value);
 const asMessageId = (value: string): MessageId => MessageId.make(value);
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
+
+it("turns generated tool summaries into updates for their tool calls", () => {
+  const activities = runtimeEventToActivities({
+    eventId: asEventId("summary-1"),
+    provider: ProviderDriverKind.make("pi"),
+    providerInstanceId: ProviderInstanceId.make("pi"),
+    createdAt: "2026-09-03T00:00:00.000Z",
+    threadId: asThreadId("thread-1"),
+    turnId: asTurnId("turn-1"),
+    type: "tool.summary",
+    payload: {
+      summary: "Inspected repository files",
+      precedingToolUseIds: ["tool-1"],
+    },
+  });
+
+  expect(activities).toMatchObject([
+    {
+      kind: "tool.updated",
+      summary: "Inspected repository files",
+      payload: { toolCallId: "tool-1" },
+    },
+  ]);
+});
 
 type LegacyProviderRuntimeEvent = {
   readonly type: string;

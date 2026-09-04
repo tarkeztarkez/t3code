@@ -1051,6 +1051,69 @@ describe("buildThreadFeed", () => {
       live: false,
     });
   });
+
+  it("shows a late notebook summary and keeps its source expandable", () => {
+    const turnId = TurnId.make("turn-notebook");
+    const thread = makeThread({
+      id: ThreadId.make("thread-notebook"),
+      projectId: ProjectId.make("project-1"),
+      title: "Notebook tools",
+      activities: [
+        makeActivity({
+          id: EventId.make("notebook-start"),
+          kind: "tool.updated",
+          tone: "tool",
+          summary: "exec started",
+          createdAt: "2026-04-01T00:00:01.000Z",
+          turnId,
+          payload: {
+            itemType: "dynamic_tool_call",
+            title: "exec",
+            toolCallId: "notebook-1",
+            status: "inProgress",
+            data: { tool: "exec", args: { code: "await tools.exec_command({ cmd: 'pwd' })" } },
+          },
+        }),
+        makeActivity({
+          id: EventId.make("notebook-complete"),
+          kind: "tool.completed",
+          tone: "tool",
+          summary: "exec",
+          createdAt: "2026-04-01T00:00:02.000Z",
+          turnId,
+          payload: {
+            itemType: "dynamic_tool_call",
+            title: "exec",
+            toolCallId: "notebook-1",
+            status: "completed",
+          },
+        }),
+        makeActivity({
+          id: EventId.make("notebook-summary"),
+          kind: "tool.updated",
+          tone: "tool",
+          summary: "Checked the working directory",
+          createdAt: "2026-04-01T00:00:03.000Z",
+          turnId,
+          payload: { toolCallId: "notebook-1" },
+        }),
+      ],
+    });
+
+    const feed = buildThreadFeed(thread);
+    const activityGroup = feed.find((entry) => entry.type === "activity-group");
+    expect(activityGroup).toMatchObject({
+      activities: [
+        {
+          id: "notebook-start",
+          summary: "Checked the working directory",
+          canExpand: true,
+        },
+      ],
+    });
+    if (activityGroup?.type !== "activity-group") throw new Error("missing activity group");
+    expect(activityGroup.activities[0]?.getFullDetail()).toContain("Notebook cell");
+  });
 });
 
 describe("quiet timeline: nested agents", () => {

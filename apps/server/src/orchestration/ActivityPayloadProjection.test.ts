@@ -64,6 +64,25 @@ describe("projectActivityPayload", () => {
     expect(JSON.stringify(projected.payload).length).toBeLessThan(500);
   });
 
+  it("keeps bounded Pi notebook source for the expanded tool row", () => {
+    const projected = projectActivityPayload(
+      activity({
+        itemType: "dynamic_tool_call",
+        data: {
+          tool: "exec",
+          args: { code: `await tools.exec_command({ cmd: "rg TODO" })\n${"x".repeat(50_000)}` },
+          result: { content: "large output that is not needed here" },
+        },
+      }),
+    );
+    const data = (projected.payload as Record<string, unknown>).data as Record<string, unknown>;
+    const args = data.args as Record<string, unknown>;
+    expect(data.tool).toBe("exec");
+    expect(args.code).toMatch(/^await tools\.exec_command/u);
+    expect(String(args.code).length).toBeLessThan(40_010);
+    expect(data.result).toBeUndefined();
+  });
+
   it("keeps bounded Claude and ACP command output summaries", () => {
     const claude = projectActivityPayload(
       activity({

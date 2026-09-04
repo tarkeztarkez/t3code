@@ -69,6 +69,8 @@ const PROVIDER = ProviderDriverKind.make("pi");
 const encodeJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 const PI_MCP_BRIDGE_TOKEN_ENV = "T3_MCP_BEARER_TOKEN";
 const PI_SUBAGENTS_FLEET_PREFIX = "T3_SUBAGENTS ";
+const PI_NOTEBOOK_SUMMARY_MODEL = "gpt-5.6-luna";
+const PI_NOTEBOOK_SUMMARY_MAX_CODE_CHARS = 20_000;
 const PiSubagentFleet = Schema.Array(
   Schema.Struct({
     id: Schema.String,
@@ -199,6 +201,34 @@ function toolDetailFromArgs(toolName: string, args: unknown): string | undefined
   if ("path" in args && typeof args.path === "string") return args.path;
   if ("file_path" in args && typeof args.file_path === "string") return args.file_path;
   return undefined;
+}
+
+function notebookCodeFromArgs(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || !("code" in args)) return undefined;
+  const code = args.code;
+  return typeof code === "string" && code.trim().length > 0 ? code.trim() : undefined;
+}
+
+export function notebookToolSummaryPrompt(code: string): string {
+  return [
+    "Write one short past-tense activity label for this coding-agent notebook cell.",
+    "Describe its purpose, not JavaScript mechanics. Use 3-10 words and at most 72 characters.",
+    "Do not use quotes, markdown, a trailing period, or the words command, tool, or notebook.",
+    "Return only the label.",
+    "",
+    code.slice(0, PI_NOTEBOOK_SUMMARY_MAX_CODE_CHARS),
+  ].join("\n");
+}
+
+export function normalizeNotebookToolSummary(value: string): string | null {
+  const firstLine = value
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+    ?.replace(/^['"`]+|['"`.]+$/gu, "")
+    .trim();
+  if (!firstLine) return null;
+  return firstLine.length <= 72 ? firstLine : `${firstLine.slice(0, 71).trimEnd()}…`;
 }
 
 function textFromContentBlocks(content: PiMessageContent | undefined): string {
@@ -500,6 +530,48 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
 
     const emit = (event: ProviderRuntimeEvent) =>
       Queue.offer(runtimeEvents, event).pipe(Effect.asVoid);
+    const summarizeNotebookTool = Effect.fn("summarizeNotebookTool")(function* (
+      context: PiSessionContext,
+      turnId: TurnId | undefined,
+      toolCallId: string,
+      code: string,
+    ) {
+      const result = yield* piRuntime.runCommand({
+        binaryPath: options?.command?.binaryPath ?? piSettings.binaryPath,
+        ...(options?.command?.argsPrefix ? { argsPrefix: options.command.argsPrefix } : {}),
+        args: [
+          "--print",
+          "--mode",
+          "text",
+          "--no-session",
+          "--no-tools",
+          "--no-extensions",
+          "--no-skills",
+          "--no-prompt-templates",
+          "--no-context-files",
+          "--thinking",
+          "minimal",
+          "--provider",
+          "openai-codex",
+          "--model",
+          PI_NOTEBOOK_SUMMARY_MODEL,
+        ],
+        stdin: notebookToolSummaryPrompt(code),
+        ...(options?.environment ? { environment: options.environment } : {}),
+        ...(context.session.cwd ? { cwd: context.session.cwd } : {}),
+      });
+      if (result.code !== 0) return;
+      const summary = normalizeNotebookToolSummary(result.stdout);
+      if (!summary) return;
+      yield* emit({
+        ...(yield* buildEventBase({
+          threadId: context.session.threadId,
+          turnId,
+        })),
+        type: "tool.summary",
+        payload: { summary, precedingToolUseIds: [toolCallId] },
+      });
+    });
     const settlePendingRequestsAsCancelled = Effect.fn("settlePendingRequestsAsCancelled")(
       function* (context: PiSessionContext) {
         const threadId = context.session.threadId;
@@ -993,6 +1065,17 @@ export function makePiAdapter(piSettings: PiSettings, options?: PiAdapterLiveOpt
                   : "item.updated",
             payload,
           });
+          const notebookCode =
+            event.type === "tool_execution_start" && toolName === "exec"
+              ? notebookCodeFromArgs(event.args)
+              : undefined;
+          if (notebookCode) {
+            yield* summarizeNotebookTool(context, turnId, toolCallId, notebookCode).pipe(
+              Effect.timeout("30 seconds"),
+              Effect.ignore({ log: true }),
+              Effect.forkIn(context.sessionScope),
+            );
+          }
           break;
         }
 

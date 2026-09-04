@@ -713,6 +713,21 @@ export function runtimeEventToActivities(
       ];
     }
 
+    case "tool.summary": {
+      return (event.payload.precedingToolUseIds ?? []).map((toolCallId, index) => ({
+        id: EventId.make(`${event.eventId}:tool-summary:${index}`),
+        createdAt: event.createdAt,
+        tone: "tool" as const,
+        kind: "tool.updated" as const,
+        summary: event.payload.summary,
+        payload: {
+          toolCallId,
+        },
+        turnId: toTurnId(event.turnId) ?? null,
+        ...maybeSequence,
+      }));
+    }
+
     case "task.completed": {
       return [
         {

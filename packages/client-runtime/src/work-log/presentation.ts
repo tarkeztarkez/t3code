@@ -64,7 +64,12 @@ export function toolGroupAction(entry: WorkLogPresentationEntry): ToolGroupActio
   ) {
     return "edit";
   }
-  if (entry.requestKind === "command" || entry.itemType === "command_execution" || entry.command) {
+  if (
+    entry.requestKind === "command" ||
+    entry.itemType === "command_execution" ||
+    entry.command ||
+    (entry.itemType === "dynamic_tool_call" && entry.toolTitle?.toLowerCase() === "exec")
+  ) {
     return "command";
   }
   if (workLogEntryIsLocalCodeSearch(entry)) return "code-search";
@@ -97,7 +102,7 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
     case "edit":
       return `Changed ${count} ${count === 1 ? "file" : "files"}`;
     case "command":
-      return `Ran ${count} ${count === 1 ? "command" : "commands"}`;
+      return count === 1 ? "Ran command" : `Ran ${count} commands`;
     case "search":
       return `Searched the web ${count} ${count === 1 ? "time" : "times"}`;
     case "code-search":
@@ -111,6 +116,14 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
 
 export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEntry>): string {
   const summaryEntries = omitSupersededLifecycleMarkers(entries, (entry) => entry);
+  const onlyEntry = summaryEntries.length === 1 ? summaryEntries[0] : undefined;
+  if (
+    onlyEntry?.itemType === "dynamic_tool_call" &&
+    onlyEntry.toolTitle?.toLowerCase() === "exec" &&
+    !/^exec(?: started)?$/iu.test(onlyEntry.label.trim())
+  ) {
+    return onlyEntry.label;
+  }
   const groupedEntries = new Map<ToolGroupAction, WorkLogPresentationEntry[]>();
   for (const entry of summaryEntries) {
     const action = toolGroupAction(entry);

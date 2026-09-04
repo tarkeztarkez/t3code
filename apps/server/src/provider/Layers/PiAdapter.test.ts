@@ -36,7 +36,11 @@ import {
   type PiRuntimeShape,
   type SpawnPiRpcInput,
 } from "../piRuntime.ts";
-import { makePiAdapter } from "./PiAdapter.ts";
+import {
+  makePiAdapter,
+  normalizeNotebookToolSummary,
+  notebookToolSummaryPrompt,
+} from "./PiAdapter.ts";
 
 class PiAdapter extends Context.Service<PiAdapter, PiAdapterShape>()(
   "t3/provider/Layers/PiAdapter.test/PiAdapter",
@@ -55,6 +59,7 @@ type FakePiHandle = {
 const runtimeMock = {
   state: {
     spawnInputs: [] as Array<SpawnPiRpcInput>,
+    runCommandInputs: [] as Array<Parameters<PiRuntimeShape["runCommand"]>[0]>,
     handles: [] as Array<FakePiHandle>,
     requests: [] as Array<Record<string, unknown>>,
     notifications: [] as Array<Record<string, unknown>>,
@@ -82,6 +87,7 @@ const runtimeMock = {
   },
   reset() {
     this.state.spawnInputs.length = 0;
+    this.state.runCommandInputs.length = 0;
     this.state.handles.length = 0;
     this.state.requests.length = 0;
     this.state.notifications.length = 0;
@@ -113,13 +119,11 @@ const commandType = (command: Record<string, unknown>): string =>
   typeof command.type === "string" ? command.type : "unknown";
 
 const PiRuntimeTestDouble: PiRuntimeShape = {
-  runCommand: () =>
-    Effect.fail(
-      new PiRuntimeError({
-        operation: "runCommand",
-        detail: "PiRuntimeTestDouble.runCommand not used in adapter tests",
-      }),
-    ),
+  runCommand: (input) =>
+    Effect.sync(() => {
+      runtimeMock.state.runCommandInputs.push(input);
+      return { stdout: "Inspected repository files\n", stderr: "", code: 0 };
+    }),
   spawnSession: (input) =>
     Effect.gen(function* () {
       const attemptIndex = runtimeMock.state.spawnInputs.length;
@@ -231,6 +235,14 @@ const attachMcpSession = (threadId: ThreadId, token = "mcp-secret-token") =>
 beforeEach(() => {
   runtimeMock.reset();
   McpProviderSession.clearAllMcpProviderSessions();
+});
+
+it("builds and normalizes concise notebook summaries", () => {
+  NodeAssert.match(notebookToolSummaryPrompt("await tools.readFile()"), /await tools\.readFile/u);
+  NodeAssert.equal(
+    normalizeNotebookToolSummary('"Checked repository files."\nIgnored'),
+    "Checked repository files",
+  );
 });
 
 it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
@@ -808,6 +820,43 @@ it.layer(PiAdapterTestLayer)("PiAdapterLive", (it) => {
       );
       NodeAssert.equal(toolEvents.length, 2);
       NodeAssert.equal(String(toolEvents[0]?.itemId), String(toolEvents[1]?.itemId));
+    }),
+  );
+
+  it.effect("summarizes notebook input with Luna at minimal thinking", () =>
+    Effect.gen(function* () {
+      const adapter = yield* PiAdapter;
+      const threadId = asThreadId("thread-pi-notebook-summary");
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(5),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* startPiSession(adapter, threadId);
+      yield* adapter.sendTurn({ threadId, input: "Inspect files" });
+      const handle = runtimeMock.state.handles[0]!;
+      yield* Queue.offer(handle.eventsQueue, {
+        type: "tool_execution_start",
+        toolCallId: "notebook-1",
+        toolName: "exec",
+        args: { code: "await tools.exec_command({ cmd: 'rg TODO' })" },
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      const summary = events.find((event) => event.type === "tool.summary");
+      NodeAssert.deepEqual(summary?.payload, {
+        summary: "Inspected repository files",
+        precedingToolUseIds: [`${threadId}:pi-session-1:notebook-1`],
+      });
+      NodeAssert.deepEqual(runtimeMock.state.runCommandInputs[0]?.args.slice(-6), [
+        "--thinking",
+        "minimal",
+        "--provider",
+        "openai-codex",
+        "--model",
+        "gpt-5.6-luna",
+      ]);
     }),
   );
 

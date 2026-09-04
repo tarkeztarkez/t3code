@@ -329,6 +329,19 @@ function projectAcpContent(value: unknown): Record<string, unknown> | undefined 
   return summary ? { content: summary } : undefined;
 }
 
+function projectNotebookToolData(data: Record<string, unknown>): Record<string, unknown> | null {
+  if (data.tool !== "exec") return null;
+  const code = asTrimmedString(asRecord(data.args)?.code);
+  if (!code) return { tool: "exec" };
+  const maxCodeChars = 40_000;
+  return {
+    tool: "exec",
+    args: {
+      code: code.length <= maxCodeChars ? code : `${code.slice(0, maxCodeChars).trimEnd()}\n…`,
+    },
+  };
+}
+
 /**
  * Removes activity payload fields that no current client reads while retaining
  * the full payload in persistence and the event store.
@@ -356,6 +369,19 @@ export function projectActivityPayload(
         data: projectMcpToolCallData(data),
       },
     };
+  }
+
+  if (payload.itemType === "dynamic_tool_call") {
+    const notebookData = projectNotebookToolData(data);
+    if (notebookData) {
+      return {
+        ...activity,
+        payload: {
+          ...projectedPayload,
+          data: notebookData,
+        },
+      };
+    }
   }
 
   const projectedData: Record<string, unknown> = {};

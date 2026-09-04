@@ -1201,6 +1201,70 @@ describe("deriveWorkLogEntries", () => {
     expect(entry?.toolCallId).toBe("call-1");
   });
 
+  it("keeps notebook source and merges a summary that arrives after completion", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "notebook-start",
+        createdAt: "2026-09-03T00:00:01.000Z",
+        kind: "tool.updated",
+        summary: "exec started",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "exec",
+          toolCallId: "notebook-1",
+          status: "inProgress",
+          data: { tool: "exec", args: { code: "await tools.exec_command({ cmd: 'rg TODO' })" } },
+        },
+      }),
+      makeActivity({
+        id: "notebook-early-summary",
+        createdAt: "2026-09-03T00:00:02.000Z",
+        kind: "tool.updated",
+        summary: "Searched repository files",
+        payload: { toolCallId: "notebook-1" },
+      }),
+      makeActivity({
+        id: "notebook-complete",
+        createdAt: "2026-09-03T00:00:03.000Z",
+        kind: "tool.completed",
+        summary: "exec",
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "exec",
+          toolCallId: "notebook-1",
+          status: "completed",
+          detail: "No matches",
+        },
+      }),
+      makeActivity({
+        id: "notebook-summary",
+        createdAt: "2026-09-03T00:00:04.000Z",
+        kind: "tool.updated",
+        summary: "Searched for unfinished work",
+        payload: { toolCallId: "notebook-1" },
+      }),
+    ];
+
+    expect(deriveWorkLogEntries(activities.slice(0, 3))[0]?.label).toBe(
+      "Searched repository files",
+    );
+    expect(deriveWorkLogEntries(activities)).toMatchObject([
+      {
+        id: "notebook-complete",
+        createdAt: "2026-09-03T00:00:03.000Z",
+        sourceActivityKind: "tool.completed",
+        label: "Searched for unfinished work",
+        detail: "No matches",
+        toolTitle: "exec",
+        toolLifecycleStatus: "completed",
+        toolData: {
+          tool: "exec",
+          code: "await tools.exec_command({ cmd: 'rg TODO' })",
+        },
+      },
+    ]);
+  });
+
   it("collapses interleaved lifecycle updates by tool call id", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

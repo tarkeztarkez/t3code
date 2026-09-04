@@ -2177,10 +2177,33 @@ function workEntryRawCommand(
   return rawCommand === workEntry.command.trim() ? null : rawCommand;
 }
 
+function notebookToolCode(
+  workEntry: Pick<TimelineWorkEntry, "itemType" | "toolData">,
+): string | null {
+  if (workEntry.itemType !== "dynamic_tool_call") return null;
+  const data = workEntry.toolData;
+  if (!data || typeof data !== "object" || !("tool" in data) || data.tool !== "exec") return null;
+  if (!("code" in data) || typeof data.code !== "string") return null;
+  return data.code.trim() || null;
+}
+
+function notebookWorkEntryLabel(workEntry: TimelineWorkEntry): string | null {
+  if (workEntry.itemType !== "dynamic_tool_call" || workEntry.toolTitle?.toLowerCase() !== "exec") {
+    return null;
+  }
+  const generatedLabel = normalizeCompactToolLabel(workEntry.label);
+  if (generatedLabel.toLowerCase() !== "exec" && generatedLabel.toLowerCase() !== "exec started") {
+    return capitalizePhrase(generatedLabel);
+  }
+  return workEntry.toolLifecycleStatus === "inProgress" ? "Running command" : "Ran command";
+}
+
 function liveWorkEntryLabel(
   workEntry: TimelineWorkEntry,
   workspaceRoot: string | undefined,
 ): string {
+  const notebookLabel = notebookWorkEntryLabel(workEntry);
+  if (notebookLabel) return notebookLabel;
   const command = workEntry.command?.trim();
   if (command) {
     // This row describes the active parent turn, not the command lifecycle.
@@ -2198,6 +2221,10 @@ function buildToolCallExpandedBody(
   workspaceRoot: string | undefined,
 ): string | null {
   const blocks: string[] = [];
+  const notebookCode = notebookToolCode(workEntry);
+  if (notebookCode) {
+    blocks.push(`Notebook cell\n${notebookCode}`);
+  }
   if (workEntry.itemType === "mcp_tool_call" && workEntry.toolData !== undefined) {
     blocks.push(`MCP call\n${JSON.stringify(workEntry.toolData, null, 2)}`);
   }
@@ -2393,7 +2420,10 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
   const showFailedIndicator = workEntryDisplayIndicatesToolFailure(workEntry);
   const entryIconName =
     showWarningIndicator || showFailedIndicator ? "circle-alert" : workEntryIconName(workEntry);
-  const displayText = workEntryPreview(workEntry, workspaceRoot) ?? toolWorkEntryHeading(workEntry);
+  const displayText =
+    notebookWorkEntryLabel(workEntry) ??
+    workEntryPreview(workEntry, workspaceRoot) ??
+    toolWorkEntryHeading(workEntry);
   const expandedBody = buildToolCallExpandedBody(workEntry, workspaceRoot);
   const canExpand = expandedBody !== null;
   const showDestructiveRowStyle =

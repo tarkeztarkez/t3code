@@ -949,6 +949,13 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
       entry.toolData = data.item;
     }
   }
+  if (itemType === "dynamic_tool_call") {
+    const data = asRecord(payload?.data);
+    const args = asRecord(data?.args);
+    if (data?.tool === "exec" && typeof args?.code === "string") {
+      entry.toolData = { tool: "exec", code: args.code };
+    }
+  }
   if (itemType) {
     entry.itemType = itemType;
   }
@@ -1136,7 +1143,10 @@ function shouldCollapseToolLifecycleEntries(
   if (previous.turnId !== next.turnId) {
     return false;
   }
-  if (previous.sourceActivityKind === "tool.completed") {
+  if (
+    previous.sourceActivityKind === "tool.completed" &&
+    (previous.toolCallId === undefined || previous.toolCallId !== next.toolCallId)
+  ) {
     return false;
   }
   if (
@@ -1169,9 +1179,24 @@ function mergeDerivedWorkLogEntries(
   const toolCallId = next.toolCallId ?? previous.toolCallId;
   const toolLifecycleStatus = next.toolLifecycleStatus ?? previous.toolLifecycleStatus;
   const toolData = next.toolData ?? previous.toolData;
+  const label =
+    previous.toolTitle?.toLowerCase() === "exec" &&
+    !/^exec(?: started)?$/iu.test(previous.label.trim()) &&
+    /^exec(?: started)?$/iu.test(next.label.trim())
+      ? previous.label
+      : next.label;
+  const summaryPatch = next.itemType === undefined && next.toolCallId !== undefined;
   return {
     ...previous,
     ...next,
+    ...(summaryPatch
+      ? {
+          id: previous.id,
+          createdAt: previous.createdAt,
+          sourceActivityKind: previous.sourceActivityKind,
+        }
+      : {}),
+    label,
     ...(detail ? { detail } : {}),
     ...(command ? { command } : {}),
     ...(rawCommand ? { rawCommand } : {}),

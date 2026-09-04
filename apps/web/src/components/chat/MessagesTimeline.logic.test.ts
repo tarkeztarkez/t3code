@@ -6,6 +6,7 @@ import {
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
   shouldPreserveAssistantLineBreaks,
+  summarizeToolGroup,
 } from "./MessagesTimeline.logic";
 
 describe("shouldPreserveAssistantLineBreaks", () => {
@@ -215,6 +216,27 @@ describe("normalizeCompactToolLabel", () => {
 
   it("removes trailing completion wording from other labels", () => {
     expect(normalizeCompactToolLabel("Read file completed")).toBe("Read file");
+  });
+});
+
+describe("summarizeToolGroup", () => {
+  const notebookEntry = (label: string) => ({
+    id: label,
+    createdAt: "2026-01-01T00:00:00Z",
+    label,
+    toolTitle: "exec",
+    itemType: "dynamic_tool_call" as const,
+    tone: "tool" as const,
+  });
+
+  it("uses generated notebook labels for one call and counts larger runs", () => {
+    expect(summarizeToolGroup([notebookEntry("exec")])).toBe("Ran command");
+    expect(summarizeToolGroup([notebookEntry("Checked repository status")])).toBe(
+      "Checked repository status",
+    );
+    expect(summarizeToolGroup([notebookEntry("First"), notebookEntry("Second")])).toBe(
+      "Ran 2 commands",
+    );
   });
 });
 
@@ -1015,7 +1037,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(rows.map((row) => row.kind)).toEqual(["working", "work-toggle", "message", "work-live"]);
     expect(rows.find((row) => row.kind === "work-toggle")).toMatchObject({
       hiddenCount: 1,
-      summary: "Ran 1 command",
+      summary: "Ran command",
     });
   });
 
