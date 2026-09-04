@@ -170,6 +170,7 @@ interface TimelineRowSharedState {
 
 interface TimelineRowActivityState {
   isWorking: boolean;
+  isSessionStarting: boolean;
   isRevertingCheckpoint: boolean;
   latestTurnId: TurnId | null;
 }
@@ -226,6 +227,7 @@ interface MessagesTimelineProps {
   agentPanelModel?: AgentPanelModel;
   onOpenAgents?: () => void;
   isWorking: boolean;
+  isSessionStarting?: boolean;
   activeTurnStartedAt: string | null;
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReturnType<typeof deriveTimelineEntries>;
@@ -271,6 +273,7 @@ interface MessagesTimelineProps {
 
 export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
+  isSessionStarting = false,
   activeTurnStartedAt,
   agentPanelModel = EMPTY_AGENT_PANEL_MODEL,
   onOpenAgents = NOOP_OPEN_AGENTS,
@@ -578,10 +581,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const activityState = useMemo<TimelineRowActivityState>(
     () => ({
       isWorking,
+      isSessionStarting,
       isRevertingCheckpoint,
       latestTurnId: latestTurn?.turnId ?? null,
     }),
-    [isRevertingCheckpoint, isWorking, latestTurn?.turnId],
+    [isRevertingCheckpoint, isSessionStarting, isWorking, latestTurn?.turnId],
   );
 
   // Stable renderItem — no closure deps. Row components read shared state
@@ -1319,7 +1323,12 @@ function ProposedPlanTimelineRow({
 }
 
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const label = row.showThinking ? "Starting session…" : "Working…";
+  const { isSessionStarting } = use(TimelineRowActivityCtx);
+  const label = isSessionStarting
+    ? "Starting session…"
+    : row.showThinking
+      ? "Thinking…"
+      : "Working…";
 
   return (
     <div className="py-1.5">

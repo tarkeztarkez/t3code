@@ -749,6 +749,51 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain('data-maintain-scroll-at-end="enabled"');
   });
 
+  it("labels an active turn without visible output as thinking", () => {
+    const turnId = TurnId.make("turn-waiting-for-output");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        latestTurn={{
+          turnId,
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        runningTurnId={turnId}
+        timelineEntries={[buildUserTimelineEntry("Explain this.")]}
+      />,
+    );
+
+    expect(markup).toContain("Thinking…");
+    expect(markup).not.toContain("Starting session…");
+  });
+
+  it("only labels the wait as session startup while the session is starting", () => {
+    const turnId = TurnId.make("turn-starting-session");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        isSessionStarting
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        latestTurn={{
+          turnId,
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        runningTurnId={turnId}
+        timelineEntries={[buildUserTimelineEntry("Start a session.")]}
+      />,
+    );
+
+    expect(markup).toContain("Starting session…");
+    expect(markup).not.toContain("Thinking…");
+  });
+
   it("hands end-following back to the list once the send anchor is released", () => {
     const firstEntry = buildUserTimelineEntry("First prompt.");
     const secondEntry = {
@@ -1248,7 +1293,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("Working for");
+    expect(markup).toContain("Working…");
     expect(markup).toContain("Running pnpm");
     expect(markup).toContain("live-activity-focus");
   });

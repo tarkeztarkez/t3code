@@ -7282,6 +7282,7 @@ function ChatViewContent(props: ChatViewProps) {
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}
                 isWorking={timelineIsWorking}
+                isSessionStarting={activeThread.session?.status === "starting"}
                 activeTurnStartedAt={timelineActiveWorkStartedAt}
                 listRef={legendListRef}
                 timelineEntries={timelineEntries}
