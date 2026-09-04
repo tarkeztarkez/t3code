@@ -19,6 +19,7 @@ import {
   PI_CLAUDE_COMPAT_EXTENSION_SOURCE,
   PI_SUBAGENTS_EXTENSION_SOURCE,
 } from "./pi/extensions/bundled-sources.ts";
+import t3OpenAICodexModels from "./pi/extensions/openai-codex-models.ts";
 import requestUserInput from "./pi/extensions/request-user-input.ts";
 import t3codeApprovals from "./pi/extensions/t3-approvals.ts";
 import { collectStreamAsString } from "./providerSnapshot.ts";
@@ -160,9 +161,11 @@ export const PI_RUNTIME_MODE_ENV = "T3CODE_PI_RUNTIME_MODE";
 export const PI_USER_INPUT_TITLE_PREFIX = "T3_USER_INPUT ";
 
 export const PI_APPROVAL_EXTENSION_SOURCE = `export default ${t3codeApprovals.toString()};\n`;
+export const PI_OPENAI_CODEX_MODELS_EXTENSION_SOURCE = `export default ${t3OpenAICodexModels.toString()};\n`;
 export const PI_REQUEST_USER_INPUT_EXTENSION_SOURCE = `export default ${requestUserInput.toString()};\n`;
 export const PI_BUNDLED_EXTENSIONS = [
   { fileName: "t3-approvals.ts", source: PI_APPROVAL_EXTENSION_SOURCE },
+  { fileName: "openai-codex-models.ts", source: PI_OPENAI_CODEX_MODELS_EXTENSION_SOURCE },
   { fileName: "request-user-input.ts", source: PI_REQUEST_USER_INPUT_EXTENSION_SOURCE },
   { fileName: "claude-compat.ts", source: PI_CLAUDE_COMPAT_EXTENSION_SOURCE },
   { fileName: "pi-subagents.ts", source: PI_SUBAGENTS_EXTENSION_SOURCE },

@@ -1,5 +1,11 @@
 # Pi
 
+## GPT-6 Astra
+
+Bundled Pi lists GPT-6 Astra as `openai-codex/gpt-6-astra`. Connect Pi to your ChatGPT
+subscription in **Settings > Providers** to use it. OpenAI is rolling access out by account, so the
+model can appear in T3 Code before your account is allowed to run it.
+
 ## Skills
 
 Type `$` in the composer to search the skills Pi makes available for the current project. T3 Code

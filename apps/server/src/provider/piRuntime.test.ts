@@ -18,6 +18,7 @@ import {
   PI_APPROVAL_OPTION_ALLOW_ALWAYS,
   PI_APPROVAL_OPTION_DENY,
   PI_APPROVAL_TITLE_PREFIX,
+  PI_OPENAI_CODEX_MODELS_EXTENSION_SOURCE,
   PI_REQUEST_USER_INPUT_EXTENSION_SOURCE,
   spawnPiRpcSession,
   toPiApprovalSelection,
@@ -307,6 +308,52 @@ describe("parsePiApprovalTitle", () => {
 });
 
 describe("bundled Pi extensions", () => {
+  it("adds GPT-6 Astra to the OpenAI Codex provider", () => {
+    let registration:
+      | {
+          readonly provider: string;
+          readonly config: {
+            readonly models: ReadonlyArray<{
+              readonly id: string;
+              readonly contextWindow: number;
+              readonly maxTokens: number;
+              readonly thinkingLevelMap: Record<string, string | null>;
+            }>;
+          };
+        }
+      | undefined;
+    const load = new Function(
+      PI_OPENAI_CODEX_MODELS_EXTENSION_SOURCE.replace(/^export default /, "return "),
+    ) as () => (pi: {
+      registerProvider: (
+        provider: string,
+        config: NonNullable<typeof registration>["config"],
+      ) => void;
+    }) => void;
+
+    load()({
+      registerProvider: (provider, config) => {
+        registration = { provider, config };
+      },
+    });
+
+    expect(registration?.provider).toBe("openai-codex");
+    expect(registration?.config.models[0]).toMatchObject({
+      id: "gpt-6-astra",
+      contextWindow: 272_000,
+      maxTokens: 128_000,
+      thinkingLevelMap: {
+        off: "low",
+        minimal: "low",
+        low: "low",
+        medium: "medium",
+        high: "high",
+        xhigh: "xhigh",
+        max: "max",
+      },
+    });
+  });
+
   it("serializes request-user-input as a self-contained extension", () => {
     let registeredToolName: string | undefined;
     const load = new Function(
