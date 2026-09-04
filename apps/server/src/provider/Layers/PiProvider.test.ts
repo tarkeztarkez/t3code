@@ -387,6 +387,7 @@ it.layer(PiProviderTestLayer)("checkPiProviderStatus", (it) => {
         "anthropic/claude-haiku-4-5",
         "anthropic/claude-sonnet-5",
         "openai-codex/gpt-5-codex",
+        "openai-codex/gpt-6-astra",
       ]);
       NodeAssert.equal(runtimeMock.state.closeCalls, 1);
 

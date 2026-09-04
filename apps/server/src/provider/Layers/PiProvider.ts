@@ -111,6 +111,29 @@ function toServerProviderModels(
   return out.toSorted((left, right) => left.slug.localeCompare(right.slug));
 }
 
+function withBundledPiModels(
+  models: ReadonlyArray<PiAvailableModel>,
+): ReadonlyArray<PiAvailableModel> {
+  const hasOpenAICodex = models.some(
+    (model) => model.provider.trim().toLowerCase() === "openai-codex",
+  );
+  const hasAstra = models.some(
+    (model) =>
+      model.provider.trim().toLowerCase() === "openai-codex" &&
+      model.id.trim().toLowerCase() === "gpt-6-astra",
+  );
+  if (!hasOpenAICodex || hasAstra) return models;
+  return [
+    ...models,
+    {
+      provider: "openai-codex",
+      id: "gpt-6-astra",
+      name: "GPT-6 Astra",
+      reasoning: true,
+    },
+  ];
+}
+
 function formatPiProbeError(detail: string): { installed: boolean; message: string } {
   const lower = detail.toLowerCase();
   if (lower.includes("enoent") || lower.includes("notfound") || lower.includes("not found")) {
@@ -324,7 +347,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     return fallback(detail, version);
   }
 
-  const piModels = modelsExit.value;
+  const piModels = withBundledPiModels(modelsExit.value);
   const discoveredModels = toServerProviderModels(piModels);
   const models = providerModelsFromSettings(
     discoveredModels,
