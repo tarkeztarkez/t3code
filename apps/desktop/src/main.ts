@@ -123,6 +123,7 @@ const electronLayer = Layer.mergeAll(
   ElectronProtocol.layer,
   ElectronRelaunch.layer((options) =>
     Effect.sync(() => {
+      ElectronRelaunch.disableAppImageLauncherForRelaunch(process.env);
       Electron.app.relaunch({ execPath: options.execPath, args: [...options.args] });
       Electron.app.quit();
     }),

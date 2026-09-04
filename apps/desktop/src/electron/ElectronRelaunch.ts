@@ -7,6 +7,14 @@ export interface ElectronRelaunchOptions {
   readonly args: ReadonlyArray<string>;
 }
 
+export function disableAppImageLauncherForRelaunch(environment: NodeJS.ProcessEnv): void {
+  // AppImageLauncher watches integrated AppImages and may still be processing
+  // a newly replaced file when Electron starts it again. Bypass that
+  // integration pass for the relaunch. The AppImage runtime still mounts and
+  // starts the file normally.
+  environment.APPIMAGELAUNCHER_DISABLE = "1";
+}
+
 export class ElectronRelaunch extends Context.Service<
   ElectronRelaunch,
   {
