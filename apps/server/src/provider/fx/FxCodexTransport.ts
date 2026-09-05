@@ -8,6 +8,8 @@ const FORWARDED_HEADERS = [
   "version",
   "session-id",
   "x-client-request-id",
+  "x-openai-internal-codex-responses-lite",
+  "x-openai-codex-luna-reserve",
 ] as const;
 
 export class FxCodexTransportError extends Error {
@@ -78,6 +80,12 @@ export function makeFxCodexTransport(options: {
   };
 
   return {
+    usage: (signal?: AbortSignal) =>
+      request({
+        url: "https://chatgpt.com/backend-api/wham/usage",
+        headers: { "x-openai-codex-luna-reserve": "1" },
+        ...(signal ? { signal } : {}),
+      }),
     responses: (input: {
       readonly body: string;
       readonly headers?: HeadersInit;

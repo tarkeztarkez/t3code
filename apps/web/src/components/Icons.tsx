@@ -688,6 +688,18 @@ export const ACPRegistryIcon: Icon = ({ className, ...props }) => (
   </svg>
 );
 
+export const FxIcon: Icon = ({ className, ...props }) => (
+  <svg {...props} viewBox="0 0 24 24" className={cn("fill-none", className)}>
+    <path
+      d="M12 4H9L5 20M4 10h8m2 0 6 10m0-10-6 10"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 export const PiIcon: Icon = ({ className, ...props }) => (
   <svg {...props} viewBox="0 0 800 800" className={cn("fill-none", className)}>
     <rect width="800" height="800" rx="160" fill="#000" />

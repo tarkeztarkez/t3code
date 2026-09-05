@@ -89,10 +89,8 @@ export const deriveProviderInstanceConfigMap = (
     // but it's constrained to `keyof settings.providers` by the union of
     // built-in driver kinds.
     const legacyKey = driver.driverKind as keyof ServerSettings["providers"];
-    const legacyConfig = settings.providers[legacyKey];
-    if (legacyConfig === undefined) {
-      continue;
-    }
+    // New built-ins need no legacy settings field. Their driver owns defaults.
+    const legacyConfig = settings.providers[legacyKey] ?? driver.defaultConfig();
 
     merged[instanceId] = {
       driver: driver.driverKind,

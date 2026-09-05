@@ -133,6 +133,14 @@ export class FxCodexCredential {
     headers.set("authorization", `Bearer ${this.#accessToken}`);
     headers.set("chatgpt-account-id", this.accountId);
   }
+
+  reserveIdentity(): { accountId: string; userId: string } | undefined {
+    const claims = record(jwtClaims(this.#accessToken)?.["https://api.openai.com/auth"]);
+    const userId = claims?.chatgpt_user_id ?? claims?.user_id;
+    return claims?.chatgpt_account_is_fedramp !== true && nonEmpty(userId)
+      ? { accountId: this.accountId, userId }
+      : undefined;
+  }
 }
 
 async function readAuth(path: string, expectedAccountId?: string): Promise<AuthSnapshot> {

@@ -18,18 +18,22 @@ export function executeCode({
   signal,
   timeoutMs = 10_000,
   onReady,
+  workerPath,
+  catalog = [],
 }) {
   if (!["bun", "quickjs", "quickjs-isolated"].includes(engine)) throw new Error("Unknown engine");
   if (typeof code !== "string" || Buffer.byteLength(code) > 64 * 1024)
     throw new Error("Code exceeds 64 KiB");
   signal?.throwIfAborted();
   const started = performance.now();
-  const worker = NodeURL.fileURLToPath(
-    new URL(
-      engine === "quickjs-isolated" ? "./worker-core.mjs" : `./${engine}-worker.mjs`,
-      import.meta.url,
-    ),
-  );
+  const worker =
+    workerPath ??
+    NodeURL.fileURLToPath(
+      new URL(
+        engine === "quickjs-isolated" ? "./worker-core.mjs" : `./${engine}-worker.mjs`,
+        import.meta.url,
+      ),
+    );
   const args =
     engine === "quickjs" ? ["--memory-limit", "32768", "--stack-size", "1024", worker] : [worker];
   return new Promise((resolve, reject) => {
@@ -65,7 +69,7 @@ export function executeCode({
       if (message.type === "ready" && !ready) {
         ready = true;
         await onReady?.(child.pid);
-        send({ type: "execute", code });
+        send({ type: "execute", code, catalog });
       } else if (message.type === "call" && ready && !result) {
         if (!Number.isSafeInteger(message.id) || message.id <= 0 || calls.has(message.id))
           throw new Error("Invalid tool call ID");

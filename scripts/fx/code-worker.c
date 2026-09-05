@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* No quickjs-libc, module loader, environment, filesystem, subprocess, network,
  * or timer bindings enter the guest context. The parent owns the deadline. */
@@ -10,6 +11,13 @@
 #define MAX_BOOTSTRAP (16 * 1024)
 
 static int finished;
+static clock_t started;
+
+static int interrupt(JSRuntime *runtime, void *opaque) {
+    (void)runtime;
+    (void)opaque;
+    return (double)(clock() - started) / CLOCKS_PER_SEC > 5.0;
+}
 
 static JSValue send_message(JSContext *ctx, JSValueConst self, int argc, JSValueConst *argv) {
     (void)self;
@@ -69,6 +77,8 @@ int main(int argc, char **argv) {
     JSRuntime *runtime = JS_NewRuntime();
     if (!runtime) return 1;
     JS_SetMemoryLimit(runtime, 32 * 1024 * 1024);
+    started = clock();
+    JS_SetInterruptHandler(runtime, interrupt, NULL);
     JS_SetMaxStackSize(runtime, 1024 * 1024);
     JSContext *ctx = JS_NewContext(runtime);
     if (!ctx) { JS_FreeRuntime(runtime); return 1; }

@@ -2,6 +2,8 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeChildProcess from "node:child_process";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
+import * as Effect from "effect/Effect";
+import { HostProcessPlatform } from "../../packages/shared/src/hostProcess.ts";
 
 const [engine, target] = process.argv.slice(2);
 const sources = JSON.parse(
@@ -38,8 +40,27 @@ if (engine === "fx") {
     NodePath.join(cwd, "CMakeLists.txt"),
     `\nadd_executable(fx-code-worker ${JSON.stringify(workerSource)})\ntarget_link_libraries(fx-code-worker PRIVATE qjs)\n`,
   );
-  run("cmake", ["-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]);
-  run("cmake", ["--build", "build", "--target", "qjs_exe", "fx-code-worker", "-j", "4"]);
+  run("cmake", [
+    "-S",
+    ".",
+    "-B",
+    "build",
+    "-DCMAKE_BUILD_TYPE=Release",
+    ...(Effect.runSync(HostProcessPlatform) === "darwin"
+      ? ["-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"]
+      : []),
+  ]);
+  run("cmake", [
+    "--build",
+    "build",
+    "--config",
+    "Release",
+    "--target",
+    "qjs_exe",
+    "fx-code-worker",
+    "-j",
+    "4",
+  ]);
 }
 console.log(
   JSON.stringify({

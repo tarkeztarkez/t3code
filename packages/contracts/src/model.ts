@@ -149,6 +149,7 @@ export const DEFAULT_TEXT_GENERATION_MODEL = "gpt-5.6-luna";
 export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
 
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
+  [ProviderDriverKind.make("fx")]: "gpt-5.4",
   [CODEX_DRIVER_KIND]: DEFAULT_MODEL,
   [CLAUDE_DRIVER_KIND]: "claude-sonnet-5",
   [CURSOR_DRIVER_KIND]: "auto",
@@ -169,6 +170,7 @@ export const DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
   [CURSOR_DRIVER_KIND]: "composer-2",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [PI_DRIVER_KIND]: "anthropic/claude-haiku-4-5",
+  [ProviderDriverKind.make("fx")]: "gpt-5.4-mini",
 };
 
 export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<

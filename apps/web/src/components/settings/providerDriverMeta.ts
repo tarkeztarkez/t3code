@@ -5,10 +5,20 @@ import {
   GrokSettings,
   OpenCodeSettings,
   PiSettings,
+  FxSettings,
   ProviderDriverKind,
 } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
-import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI, OpenCodeIcon, PiIcon } from "../Icons";
+import {
+  ClaudeAI,
+  CursorIcon,
+  GrokIcon,
+  type Icon,
+  OpenAI,
+  OpenCodeIcon,
+  PiIcon,
+  FxIcon,
+} from "../Icons";
 
 type ProviderSettingsSchema = {
   readonly fields: Readonly<Record<string, Schema.Top>>;
@@ -36,6 +46,7 @@ export interface ProviderClientDefinition {
 }
 
 export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = [
+  { value: ProviderDriverKind.make("fx"), label: "fx", icon: FxIcon, settingsSchema: FxSettings },
   {
     value: ProviderDriverKind.make("codex"),
     label: "Codex",

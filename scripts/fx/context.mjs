@@ -15,7 +15,11 @@ const missing = (error) => error.code === "ENOENT" || error.code === "ENOTDIR";
 
 // Capture once for a session. No timestamps, mtimes, locale-dependent ordering,
 // or per-turn skill scans enter the cached prompt prefix.
-export async function loadContext({ cwd, home = NodeOS.homedir() }) {
+export async function loadContext({
+  cwd,
+  home = NodeOS.homedir(),
+  agentDir = NodePath.join(home, ".pi/agent"),
+}) {
   const seen = new Set();
   const instructions = [];
   const skills = [];
@@ -67,7 +71,7 @@ export async function loadContext({ cwd, home = NodeOS.homedir() }) {
     directory = parent;
   }
   for (const file of [
-    NodePath.join(home, ".pi/agent/AGENTS.md"),
+    NodePath.join(agentDir, "AGENTS.md"),
     NodePath.join(home, ".agents/AGENTS.md"),
     NodePath.join(home, ".claude/CLAUDE.md"),
   ]) {
@@ -78,7 +82,7 @@ export async function loadContext({ cwd, home = NodeOS.homedir() }) {
     await visitInstruction(NodePath.join(ancestor, "CLAUDE.md"));
   }
   const skillRoots = [
-    NodePath.join(home, ".pi/agent/skills"),
+    NodePath.join(agentDir, "skills"),
     NodePath.join(home, ".agents/skills"),
     NodePath.join(home, ".claude/skills"),
     ...ancestors.flatMap((path) => [

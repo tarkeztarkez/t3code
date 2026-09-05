@@ -92,6 +92,12 @@ jobs:
           cache: true
           run-install: true
 
+      - name: Install Zig for the native fx runtime
+        if: runner.os != 'Windows'
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+
       - name: Cache Electron packaging downloads
         uses: actions/cache@v6
         with:
@@ -129,6 +135,7 @@ jobs:
         shell: bash
         env:
           T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
+          T3_BUILD_FX: ${{ runner.os != 'Windows' && '1' || '0' }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}

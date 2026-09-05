@@ -4,6 +4,12 @@ export function createWorker(send, finish) {
   let sequence = 0;
   let started = false;
   const pending = new Map();
+  const image = (value) => {
+    const images = Array.isArray(value?.content)
+      ? value.content.filter((item) => item.type === "image")
+      : [value];
+    for (const item of images) send({ type: "output", value: { fxImage: item } });
+  };
   const tools = new Proxy(Object.create(null), {
     get(_target, name) {
       if (typeof name !== "string" || name === "then") return undefined;
@@ -29,8 +35,12 @@ export function createWorker(send, finish) {
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
     Promise.resolve()
       .then(() =>
-        new AsyncFunction("tools", "text", message.code)(tools, (value) =>
-          send({ type: "output", value }),
+        new AsyncFunction("tools", "text", "image", "generatedImage", "ALL_TOOLS", message.code)(
+          tools,
+          (value) => send({ type: "output", value }),
+          image,
+          image,
+          message.catalog ?? [],
         ),
       )
       .then(

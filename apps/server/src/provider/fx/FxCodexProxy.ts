@@ -9,7 +9,14 @@ const MAX_REQUEST_BYTES = 32 * 1024 * 1024;
 
 // Each native session gets a private loopback URL. OAuth credentials never enter
 // the worker environment, fx profile, request logs, or remote client connection.
-export async function openFxCodexProxy(transport: ReturnType<typeof makeFxCodexTransport>) {
+export async function openFxCodexProxy(
+  transport: Pick<ReturnType<typeof makeFxCodexTransport>, "models" | "responses">,
+  options?: {
+    prepare: (body: string) => Promise<{ body: string; lite: boolean }>;
+    onEvent?: (event: unknown) => void;
+    onStatus?: (status: number) => void;
+  },
+) {
   const secret = NodeCrypto.randomBytes(32).toString("hex");
   const active = new Set<AbortController>();
   const server = NodeHttp.createServer((request, response) => {
@@ -46,6 +53,12 @@ export async function openFxCodexProxy(transport: ReturnType<typeof makeFxCodexT
       for (const [name, value] of Object.entries(request.headers)) {
         if (typeof value === "string") headers.set(name, value);
       }
+      const originalBody = Buffer.concat(chunks).toString("utf8");
+      const prepared =
+        !isModels && options
+          ? await options.prepare(originalBody)
+          : { body: originalBody, lite: false };
+      if (prepared.lite) headers.set("x-openai-internal-codex-responses-lite", "true");
       const upstream = isModels
         ? await transport.models({
             headers,
@@ -55,21 +68,46 @@ export async function openFxCodexProxy(transport: ReturnType<typeof makeFxCodexT
               : {}),
           })
         : await transport.responses({
-            body: Buffer.concat(chunks).toString("utf8"),
+            body: prepared.body,
             headers,
             signal: controller.signal,
           });
+      if (!isModels) options?.onStatus?.(upstream.status);
       response.writeHead(upstream.status, {
         "content-type": upstream.headers.get("content-type") ?? "application/json",
         "cache-control": "no-store",
       });
       const reader = upstream.body?.getReader();
+      const sse = upstream.headers.get("content-type")?.includes("text/event-stream");
+      const decoder = new TextDecoder();
+      let pendingLine = "";
+      let trailing = "";
+      const readLine = (line: string) => {
+        if (!line.startsWith("data:")) return;
+        try {
+          options?.onEvent?.(JSON.parse(line.slice(5).trim()));
+        } catch {
+          /* Incomplete SSE data is not a completed event. */
+        }
+      };
       if (reader) {
         try {
           for (;;) {
             const chunk = await reader.read();
             if (chunk.done) break;
             controller.signal.throwIfAborted();
+            if (sse) {
+              const text = decoder.decode(chunk.value, { stream: true });
+              trailing = (trailing + text).slice(-4);
+              pendingLine += text;
+              if (pendingLine.length > MAX_REQUEST_BYTES)
+                throw new Error("Codex SSE record exceeds limit");
+              let newline: number;
+              while ((newline = pendingLine.indexOf("\n")) >= 0) {
+                readLine(pendingLine.slice(0, newline));
+                pendingLine = pendingLine.slice(newline + 1);
+              }
+            }
             if (!response.write(chunk.value))
               await NodeEvents.EventEmitter.once(response, "drain", { signal: controller.signal });
           }
@@ -77,6 +115,13 @@ export async function openFxCodexProxy(transport: ReturnType<typeof makeFxCodexT
           await reader.cancel().catch(() => undefined);
           reader.releaseLock();
         }
+      }
+      if (sse) {
+        readLine(pendingLine + decoder.decode());
+        // Some Codex streams end immediately after a complete terminal JSON
+        // record. Flush its SSE delimiter without replaying a paid request.
+        if (trailing && !trailing.endsWith("\n\n") && !trailing.endsWith("\r\n\r\n"))
+          response.write("\n\n");
       }
       response.end();
     };

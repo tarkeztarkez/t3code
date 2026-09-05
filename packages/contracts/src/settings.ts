@@ -641,6 +641,41 @@ export const SourceControlWritingStyleSettings = Schema.Struct({
 });
 export type SourceControlWritingStyleSettings = typeof SourceControlWritingStyleSettings.Type;
 
+export const FxSettings = makeProviderSettingsSchema({
+  enabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+  ),
+  binaryPath: Schema.String.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    Schema.annotateKey({
+      title: "Native fx binary",
+      description: "Leave empty to use the bundled native fx executable.",
+    }),
+  ),
+  codeBinaryPath: Schema.String.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    Schema.annotateKey({
+      title: "Code worker binary",
+      description: "Leave empty to use the bundled isolated QuickJS worker.",
+    }),
+  ),
+  mcpServers: Schema.Record(
+    Schema.String,
+    Schema.Struct({
+      url: Schema.optionalKey(Schema.String),
+      command: Schema.optionalKey(Schema.String),
+      args: Schema.optionalKey(Schema.Array(Schema.String)),
+      headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+      env: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+    }),
+  ).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+  ),
+});
+export type FxSettings = typeof FxSettings.Type;
+
 export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
 export const DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL = Duration.minutes(5);
 

@@ -826,7 +826,7 @@ export const WINDOWS_SERVER_ASAR_RESOURCE = "server.asar";
 // helper executables live in the server.asar.unpacked sibling (the standard
 // asar redirect convention). Everything else stays packed.
 export const WINDOWS_SERVER_ASAR_UNPACK_GLOB =
-  "{**/*.node,**/*.dll,**/*.exe,**/*.so,**/*.so.*,**/*.dylib}";
+  "{**/*.node,**/*.dll,**/*.exe,**/*.so,**/*.so.*,**/*.dylib,**/apps/server/dist/fx/**}";
 // Mirrors DESKTOP_FILE_EXCLUSIONS for the hand-packed sidecar: the Claude SDK
 // platform packages are dead weight (see above), and node_modules/.bin shims
 // are never spawned at runtime (and are symlinks on POSIX build hosts, which
@@ -2156,7 +2156,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
-    asarUnpack: [CODEX_CONVERSION_NATIVE_TOOL_UNPACK_GLOB],
+    asarUnpack: [CODEX_CONVERSION_NATIVE_TOOL_UNPACK_GLOB, "**/apps/server/dist/fx/**"],
     files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
     directories: {
       buildResources: "apps/desktop/resources",

@@ -11,10 +11,18 @@ index 68900d5..3a1051f 100644
      const run_exe_tests = b.addRunArtifact(exe_tests);
      run_exe_tests.step.dependOn(b.getInstallStep());
 diff --git a/src/acp/prompt.zig b/src/acp/prompt.zig
-index 69204d9..ecea68a 100644
+index 69204d9..f0d0b7d 100644
 --- a/src/acp/prompt.zig
 +++ b/src/acp/prompt.zig
-@@ -964,17 +964,17 @@ fn buildAgentConfig(
+@@ -18,6 +18,7 @@ const acp_types = @import("types.zig");
+ const server = @import("server.zig");
+ const sessions = @import("sessions.zig");
+ const agent_runtime = @import("../core/agent/agent_runtime.zig");
++const model_response_recovery = @import("../core/agent/runtime/model_response_recovery.zig");
+ const agent_execution_memory = @import("../core/agent/execution_memory.zig");
+ const diff_mod = @import("../core/output/diff.zig");
+ const file_mutation = @import("../core/tooling/file_mutation.zig");
+@@ -964,17 +965,18 @@ fn buildAgentConfig(
      current_prompt_is_external: bool,
  ) agent_runtime.Config {
      return .{
@@ -23,9 +31,11 @@ index 69204d9..ecea68a 100644
          .host_instructions = sections.host_instructions,
 -        .model_prompt_overlay = state.cfg.prompt_policy.modelPromptOverlay(session.model),
 -        .skill_catalog = sections.skill_catalog,
+-        .gateway_retry_count = state.cfg.gateway_retry_count,
 +        .model_prompt_overlay = if (state.cfg.allow_host_tools) null else state.cfg.prompt_policy.modelPromptOverlay(session.model),
 +        .skill_catalog = if (state.cfg.allow_host_tools) .{ .skills = &.{} } else sections.skill_catalog,
-         .gateway_retry_count = state.cfg.gateway_retry_count,
++        .gateway_retry_count = if (state.cfg.allow_host_tools) 0 else state.cfg.gateway_retry_count,
++        .max_provider_attempts = if (state.cfg.allow_host_tools) 1 else model_response_recovery.default_max_provider_attempts,
          .gateway_chat_url = state.cfg.gateway_chat_url,
          .advertised_tool_names = sections.advertised_tool_names,
          .advertised_functions = sections.advertised_functions,
@@ -36,7 +46,7 @@ index 69204d9..ecea68a 100644
          .agent_step_limit = session.agent_step_limit,
          .max_tool_result_bytes = session.max_tool_result_bytes,
          .cancel_flag = &session.cancel_flag,
-@@ -1000,7 +1000,7 @@ fn buildAgentConfig(
+@@ -1000,7 +1002,7 @@ fn buildAgentConfig(
                  current_prompt_is_external
          else
              false,
@@ -45,7 +55,7 @@ index 69204d9..ecea68a 100644
          .context_limits = state.context_limits,
      };
  }
-@@ -1452,6 +1452,7 @@ fn finalizeTurn(raw_ctx: *anyopaque, turn_id: u64, outcome: types.TurnPresentati
+@@ -1452,6 +1454,7 @@ fn finalizeTurn(raw_ctx: *anyopaque, turn_id: u64, outcome: types.TurnPresentati
 
  fn appendRuntimeContext(raw_ctx: *anyopaque, arena: Allocator, messages: *std.ArrayList(ChatMessage)) !void {
      const ctx: *AcpContext = @ptrCast(@alignCast(raw_ctx));
@@ -53,7 +63,7 @@ index 69204d9..ecea68a 100644
      const session = if (ctx.state.active_session) |*active| active else unreachable;
      try ctx.state.cfg.context_registry.appendDefaultTransient(.{
          .workspace_root = ctx.state.workspace_root,
-@@ -1464,6 +1465,7 @@ fn appendRuntimeContext(raw_ctx: *anyopaque, arena: Allocator, messages: *std.Ar
+@@ -1464,6 +1467,7 @@ fn appendRuntimeContext(raw_ctx: *anyopaque, arena: Allocator, messages: *std.Ar
 
  fn appendStaticContext(raw_ctx: *anyopaque, arena: Allocator, messages: *std.ArrayList(ChatMessage)) !void {
      const ctx: *AcpContext = @ptrCast(@alignCast(raw_ctx));
@@ -62,7 +72,7 @@ index 69204d9..ecea68a 100644
          .project_context = ctx.modelVisibleProjectContext(),
      }, arena, messages);
 diff --git a/src/acp/server.zig b/src/acp/server.zig
-index aef731e..feed750 100644
+index aef731e..0a7a6f3 100644
 --- a/src/acp/server.zig
 +++ b/src/acp/server.zig
 @@ -1734,7 +1734,7 @@ fn handleInitialize(state: *ServerState, alloc: Allocator, msg: *jsonrpc.Message
@@ -82,6 +92,15 @@ index aef731e..feed750 100644
      debug_trace.logf("acp", "libfx host capabilities tools={d} instructions_bytes={d}", .{
          state.host_tools.tools.len,
          state.host_instructions.len,
+@@ -2028,7 +2029,7 @@ fn handleSetConfigOption(state: *ServerState, alloc: Allocator, msg: *jsonrpc.Me
+                 .message = "Invalid session model",
+             });
+         if (comptime !host_target.is_wasm) {
+-            if (session.provider != .gateway) {
++            if (session.provider != .gateway and !state.cfg.allow_host_tools) {
+                 try refreshModelCatalogForOptions(state);
+                 var model_available = false;
+                 if (state.capability_resolver.catalogEntries()) |entries| {
 diff --git a/src/core/agent/runtime/orchestrator.zig b/src/core/agent/runtime/orchestrator.zig
 index 7b7afa9..f4fa901 100644
 --- a/src/core/agent/runtime/orchestrator.zig

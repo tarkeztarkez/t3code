@@ -62,6 +62,7 @@ export async function openFxNativeSession(options: FxNativeOptions) {
   let stopped = false;
   let buffer = "";
   let activeTurn: AbortController | undefined;
+  const activeMessages = new Set<Promise<void>>();
   const pending = new Map<
     RpcId,
     {
@@ -166,7 +167,15 @@ export async function openFxNativeSession(options: FxNativeOptions) {
       const line = buffer.slice(0, end);
       buffer = buffer.slice(end + 1);
       try {
-        void accept(JSON.parse(line)).catch(() => fail(new Error("Invalid fx protocol message")));
+        const task = accept(JSON.parse(line));
+        activeMessages.add(task);
+        void task.then(
+          () => activeMessages.delete(task),
+          () => {
+            activeMessages.delete(task);
+            fail(new Error("Invalid fx protocol message"));
+          },
+        );
       } catch {
         fail(new Error("Invalid fx protocol message"));
       }
@@ -199,6 +208,7 @@ export async function openFxNativeSession(options: FxNativeOptions) {
     if (typeof sessionId !== "string") throw new Error("fx returned no session ID");
     return {
       sessionId,
+      isClosed: () => stopped,
       initialized,
       setup,
       prompt: async (prompt: ReadonlyArray<unknown>, signal?: AbortSignal) => {
@@ -215,10 +225,12 @@ export async function openFxNativeSession(options: FxNativeOptions) {
         } finally {
           signal?.removeEventListener("abort", cancel);
           activeTurn.abort();
+          await Promise.allSettled(activeMessages);
           activeTurn = undefined;
         }
       },
-      setModel: (model: string) => request("session/set_model", { sessionId, modelId: model }),
+      setModel: (model: string) =>
+        request("session/set_config_option", { sessionId, configId: "model", value: model }),
       setConfig: (configId: string, value: string | boolean) =>
         request("session/set_config_option", { sessionId, configId, value }),
       close,

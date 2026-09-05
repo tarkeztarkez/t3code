@@ -12,6 +12,19 @@ export function ProviderIcon(props: ProviderIconProps) {
   const size = props.size ?? 16;
   const mono = isDarkMode ? "#e5e5e5" : "#171717";
 
+  if (props.provider === "fx")
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M12 4H9L5 20M4 10h8m2 0 6 10m0-10-6 10"
+          stroke={mono}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+
   if (props.provider === "claudeAgent") {
     return (
       <Svg width={size} height={size} viewBox="0 0 256 257" fill="none">

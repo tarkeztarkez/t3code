@@ -1,9 +1,12 @@
-# fx execution prototype
+# fx provider
 
-The runtime code lives in `apps/server/src/provider/fx`, with build and execution
-fixtures in `scripts/fx`. It does not register an fx provider, change Pi, or load
-the Pi extension factory. It excludes subagents. The native executable is not
-ready for normal T3 conversations.
+`FxDriver` registers native fx as a Codex-subscription provider. Runtime code
+lives in `apps/server/src/provider/fx`; `scripts/fx` owns pinned native builds and
+the disposable Code Mode worker. Web, desktop and mobile use the shared provider
+contracts for selection, model controls, approvals and questions.
+
+The bundle includes conversion 3.0.26. Pi's execution mode and configuration
+remain unchanged. fx does not load Pi's extension factory or support subagents.
 
 ## What runs
 
@@ -30,8 +33,18 @@ ready for normal T3 conversations.
 - The isolated QuickJS executable exposes no standard OS modules or module
   loader. Its guest can access host effects only through the supplied callbacks.
 
-The worker protocol currently supports `tools.name(input)` and `text(value)`.
-It is not yet the complete conversion extension's `exec` and `wait` contract.
+The model sees `exec` and `wait`. JavaScript has `tools`, `text`, `image`,
+`generatedImage` and `ALL_TOOLS`. Host tools cover shell sessions, patches,
+images, questions, plans, MCP and configured TOML custom tools. Custom definitions
+reload for each execution; their promoted instructions stay fixed for the thread.
+Images remain in host storage as content-addressed files. Only opaque handles
+cross the QuickJS protocol. The proxy expands them into Responses image blocks.
+
+The driver stores the instruction snapshot, native session ID and turn history
+under `stateDir/fx/<instance>/<thread-hash>`. Native profiles never use the real
+home directory. Rollback restores a pre-turn native profile, with copy-on-write
+copies where the filesystem supports them. On other filesystems, these backups
+cost disk space proportional to saved conversation history.
 
 ## Build and verify
 
@@ -39,6 +52,17 @@ Use Bun for the host scripts. The repository dependencies must already be
 installed. Native builds require Git, CMake and a C compiler for QuickJS, and
 Zig 0.16.0 for fx. `sources.json` pins both source commits. Build directories
 must not exist; the build script never resets an existing checkout.
+
+`bun scripts/fx/prepare.mjs` builds a cached runtime under `.fx-build/runtime`
+and stages it into `apps/server/dist/fx`. Server bundling runs this step too.
+Set `T3_BUILD_FX=1` to fail when native tooling is missing. Desktop packaging
+unpacks executables and worker source from asar. macOS builds contain both Intel
+and Apple Silicon executables. The fork release job installs pinned Zig.
+
+The pinned fx source does not compile for native Windows. A cross-compile check
+found POSIX-specific handles and permissions, among other errors. Windows builds
+do not advertise an installed native fx runtime. Windows clients can connect to
+a Linux or macOS environment. Do not substitute the unsafe Bun fixture worker.
 
 On Linux, run builds under the CPU quota wrapper:
 
@@ -75,12 +99,18 @@ The `quickjs-isolated` engine uses `code-worker.c`, linked against QuickJS witho
 quickjs-libc. The guest has no module loader, filesystem, subprocess, network,
 environment, or timer APIs. Its only native callbacks send protocol messages to
 the host. This is an interpreter boundary, not a kernel syscall sandbox or a
-claim of protection against QuickJS vulnerabilities. The eventual T3 tool host
-must validate and authorize effects independently of guest code.
+claim of protection against QuickJS vulnerabilities. The T3 host validates tool
+inputs and requests approval before effects when the runtime mode requires it.
+Auto mode conservatively requests approval rather than purchasing extra safety
+review turns; the session emits a visible warning about that policy. Session
+grants authorize only the same tool and exact input, and expire when it closes.
 
 The parent enforces a deadline, a 64 KiB source limit, 1 MiB message and output
 limits, and at most 64 pending tool calls. QuickJS also has a 32 MiB engine heap
-limit and a 1 MiB stack limit. These are not whole-process memory limits. Bun
+limit, a 1 MiB stack limit and a five-second CPU budget per cell. Long host calls
+do not spend that CPU budget on POSIX hosts. Native delivery caps printed text
+at 60 KiB; agents should filter large results before printing. These are not
+whole-process memory limits. Bun
 has no corresponding hard heap limit in this prototype. Host tool callbacks
 must honor their abort signal and own cleanup of their subprocesses.
 
@@ -156,18 +186,25 @@ recovery. It streams successful responses with backpressure. This extra request
 buffer is part of the future whole-process-tree memory benchmark, not the
 worker-only numbers reported by `benchmark.mjs`.
 
-## Missing before release
+## Conversion 3.0.26 compatibility
 
-There is no registered T3 driver or client selection UI yet. Do not point the
-prototype fixtures at the user's live credentials or T3 state.
+- Astra and the other supported Lite models use the extension's namespace
+  helpers. Host policy occupies developer-role input. Encrypted reasoning and
+  cache identity survive effort changes. Optional arguments remain optional.
+- A complete terminal SSE record without its final separator still reaches the
+  native parser. Partial or failed streams do not trigger a host replay.
+- Codex model overrides from the Pi agent directory's `models.json` survive
+  catalog refresh. Endpoint and credential overrides cannot redirect fx auth.
+- Quota exhaustion can select Luna Reserve only after an account/user-matched
+  backend banner authorizes it. The user must send another message to continue.
+  fx never redeems reset credits. It records the original model and effort and
+  restores them after ordinary usage recovers, including after resume.
+- Notebook metadata, voice, Shepherdr and third-party Pi extension message hooks
+  have no fx lifecycle. fx does not enable those systems or their optional
+  no-summary and automatic-effort experiments. Code Mode remains disposable.
 
-Production integration still needs the complete Code Mode execution lifecycle,
-image delivery, MCP discovery and calls, questions, approvals, custom tool
-loading, and the remaining applicable bundled-extension behavior. The current
-fixture host implements shell and patch calls only. Subagents remain excluded.
-
-The eventual driver must persist fx resume state and cache identity, expose
-cached-token usage, and cover provider selection, model controls, approvals,
-questions, reconnects, and cancellation across web, desktop, and mobile.
-Credentials and tool effects belong to the environment server, including for
-remote and tunnel clients. Pi and its bundled defaults stay unchanged.
+The native integration tests cover host auth, approvals, cancellation, resumed
+context, rollback and text generation. MCP tests use a local fixture server.
+All auth tests use temporary credentials and mocked upstream responses. Do not
+point tests at live credentials or the developer's T3 database. Browser and
+device verification require explicit permission.

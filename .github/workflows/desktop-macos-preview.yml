@@ -51,6 +51,11 @@ jobs:
           cache: true
           run-install: false
 
+      - name: Install Zig for the native fx runtime
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+
       - name: Install desktop dependencies
         run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
 

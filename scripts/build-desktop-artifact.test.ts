@@ -610,7 +610,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       );
 
       for (const config of [mac, linux, win]) {
-        assert.deepStrictEqual(config.asarUnpack, [CODEX_CONVERSION_NATIVE_TOOL_UNPACK_GLOB]);
+        assert.deepStrictEqual(config.asarUnpack, [
+          CODEX_CONVERSION_NATIVE_TOOL_UNPACK_GLOB,
+          "**/apps/server/dist/fx/**",
+        ]);
       }
       assert.deepStrictEqual(win.extraResources, [
         {
@@ -635,7 +638,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       // and .bin shims never ship.
       assert.equal(
         WINDOWS_SERVER_ASAR_UNPACK_GLOB,
-        "{**/*.node,**/*.dll,**/*.exe,**/*.so,**/*.so.*,**/*.dylib}",
+        "{**/*.node,**/*.dll,**/*.exe,**/*.so,**/*.so.*,**/*.dylib,**/apps/server/dist/fx/**}",
       );
       assert.deepStrictEqual(WINDOWS_SERVER_ASAR_IGNORE_GLOBS, [
         "**/node_modules/@anthropic-ai/claude-agent-sdk-*",
@@ -1018,7 +1021,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         });
 
         assert.isFalse(
-          commands.some((command) => command.options.env?.ELECTRON_RUN_AS_NODE === "1"),
+          commands.some(
+            (command) =>
+              command.command.endsWith(fixture.appExecutableName) &&
+              command.options.env?.ELECTRON_RUN_AS_NODE === "1",
+          ),
         );
         assert.isTrue(
           commands.some(

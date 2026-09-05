@@ -57,6 +57,12 @@ export const PROVIDER_OPTIONS: Array<{
     pickerSidebarBadge: "new",
   },
   {
+    value: ProviderDriverKind.make("fx"),
+    label: "fx",
+    available: true,
+    pickerSidebarBadge: "new",
+  },
+  {
     value: ProviderDriverKind.make("pi"),
     label: "Pi",
     available: true,
