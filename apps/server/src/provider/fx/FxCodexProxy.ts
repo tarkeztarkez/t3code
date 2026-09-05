@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - Native ACP, OAuth files and fixture subprocesses use Node streams and filesystem semantics.
 import * as NodeCrypto from "node:crypto";
 import * as NodeHttp from "node:http";
 import * as NodeEvents from "node:events";

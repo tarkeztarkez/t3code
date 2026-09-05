@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - Native ACP, OAuth files and fixture subprocesses use Node streams and filesystem semantics.
+// @effect-diagnostics globalDate:off - Native protocol timestamps use wall time outside the Effect runtime.
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";

@@ -1,8 +1,12 @@
+// @effect-diagnostics nodeBuiltinImport:off - Native ACP, OAuth files and fixture subprocesses use Node streams and filesystem semantics.
+// @effect-diagnostics preferSchemaOverJson:off - Protocol fixtures intentionally build wire JSON outside production codecs.
+// @effect-diagnostics globalDateInEffect:off - Fixture OAuth timestamps must match the native process clock.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { expect, vi } from "vitest";
 import { it } from "@effect/vitest";
 import { ProviderInstanceId } from "@t3tools/contracts";
@@ -141,8 +145,11 @@ it.effect.skipIf(!process.env.FX_NATIVE_BINARY || !process.env.FX_ISOLATED_BINAR
             ).toEqual({ title: "Native fx works" });
           }),
         ).pipe(
-          Effect.provide(layerTest(home, NodePath.join(home, "state"))),
-          Effect.provide(NodeServices.layer),
+          Effect.provide(
+            layerTest(home, NodePath.join(home, "state")).pipe(
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ),
         );
         expect(getCalls()).toBe(1);
         expect(

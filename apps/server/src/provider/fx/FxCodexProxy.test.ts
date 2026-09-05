@@ -1,3 +1,4 @@
+// @effect-diagnostics globalFetch:off - The fixture exercises the real loopback HTTP proxy.
 import { describe, expect, it, vi } from "vitest";
 
 import { FxCodexAuthError } from "./FxCodexAuth.ts";

@@ -1,8 +1,10 @@
+// @effect-diagnostics nodeBuiltinImport:off - Native ACP, OAuth files and fixture subprocesses use Node streams and filesystem semantics.
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeURL from "node:url";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
@@ -149,7 +151,7 @@ export const FxDriver: ProviderDriver<FxSettings, FxDriverEnv> = {
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        checkedAt: new Date().toISOString(),
+        checkedAt: DateTime.formatIso(yield* DateTime.now),
         models: [],
         slashCommands: [],
         skills: [],
@@ -161,7 +163,7 @@ export const FxDriver: ProviderDriver<FxSettings, FxDriverEnv> = {
         );
         let next: ServerProvider = {
           ...base,
-          checkedAt: new Date().toISOString(),
+          checkedAt: DateTime.formatIso(DateTime.nowUnsafe()),
           installed,
           version: installed ? "0.0.7" : null,
         };
@@ -329,23 +331,30 @@ export const FxDriver: ProviderDriver<FxSettings, FxDriverEnv> = {
         built: { prompt: string; outputSchema: Schema.Codec<A, unknown> },
       ) =>
         Effect.tryPromise({
-          try: async (signal) =>
-            // Shared prompt builders choose their result schema per request.
-            // oxlint-disable-next-line t3code/no-inline-schema-compile
-            Schema.decodeUnknownSync(built.outputSchema)(
-              await generate(
-                cwd,
-                selection,
-                built.prompt,
-                AbortSignal.any([signal, AbortSignal.timeout(180000)]),
-              ),
+          try: (signal) =>
+            generate(
+              cwd,
+              selection,
+              built.prompt,
+              AbortSignal.any([signal, AbortSignal.timeout(180000)]),
             ),
           catch: () =>
             new TextGenerationError({
               operation,
               detail: "fx could not generate the requested JSON.",
             }),
-        });
+        }).pipe(
+          // Shared prompt builders choose their result schema per request.
+          // oxlint-disable-next-line t3code/no-inline-schema-compile
+          Effect.flatMap(Schema.decodeUnknownEffect(built.outputSchema)),
+          Effect.mapError(
+            () =>
+              new TextGenerationError({
+                operation,
+                detail: "fx could not generate the requested JSON.",
+              }),
+          ),
+        );
       const textGeneration: TextGenerationShape = {
         generateCommitMessage: (value) =>
           json(

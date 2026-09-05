@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - Native ACP, OAuth files and fixture subprocesses use Node streams and filesystem semantics.
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import type { ServerProviderModel } from "@t3tools/contracts";

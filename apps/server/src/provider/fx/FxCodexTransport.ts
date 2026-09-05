@@ -31,7 +31,7 @@ export function makeFxCodexTransport(options: {
   const request = async (input: {
     readonly url: string;
     readonly body?: string;
-    readonly headers?: HeadersInit;
+    readonly headers?: RequestInit["headers"];
     readonly signal?: AbortSignal;
   }): Promise<Response> => {
     const { signal } = input;
@@ -88,13 +88,13 @@ export function makeFxCodexTransport(options: {
       }),
     responses: (input: {
       readonly body: string;
-      readonly headers?: HeadersInit;
+      readonly headers?: RequestInit["headers"];
       readonly signal?: AbortSignal;
     }) => request({ ...input, url: `${CODEX_URL}/responses` }),
     models: (
       input: {
         readonly clientVersion?: string;
-        readonly headers?: HeadersInit;
+        readonly headers?: RequestInit["headers"];
         readonly signal?: AbortSignal;
       } = {},
     ) => {
